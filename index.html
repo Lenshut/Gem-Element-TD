@@ -188,7 +188,7 @@
 
     <div id="global-tooltip"></div>
 
-    <div id="game-container"><canvas id="gameCanvas" width="768" height="768"></canvas></div>
+    <div id="game-container"><canvas id="gameCanvas" width="1152" height="1152"></canvas></div>
 
     <div id="ui-panel">
         <div class="card">
@@ -241,9 +241,9 @@
     </div>
 
 <script>
-/** * TOWER DEFENSE PROTOTYPE ENGINE - v14.0 (Towers Expansion & Quality Updates) */
+/** * TOWER DEFENSE PROTOTYPE ENGINE - v15.0 (36x36 Expansion & Insta-Craft Logic) */
 
-const COLS = 24, ROWS = 24, CELL_SIZE = 32, CANVAS_SIZE = COLS * CELL_SIZE;
+const COLS = 36, ROWS = 36, CELL_SIZE = 32, CANVAS_SIZE = COLS * CELL_SIZE;
 const STATES = { BUILD_PLACE: 0, BUILD_SELECT: 1, BUILD_COMBINE: 2, WAVE: 3, GAME_OVER: 4, SWAPPING: 5 };
 
 let currentMaxSpawns = 5;
@@ -279,7 +279,8 @@ const SPAWN_CHANCES = [
 ];
 const EXP_REQ = [0, 10, 16, 28, 42, 60, 85, 115, 150, 200]; 
 
-const WAYPOINTS = [{x:1, y:1}, {x:1, y:11}, {x:21, y:11}, {x:21, y:1}, {x:11, y:1}, {x:11, y:21}, {x:21, y:21}];
+// Updated for 36x36 Grid
+const WAYPOINTS = [{x:1, y:1}, {x:1, y:17}, {x:33, y:17}, {x:33, y:1}, {x:17, y:1}, {x:17, y:33}, {x:33, y:33}];
 
 const RECIPES = [
     { id: 'magma', name: 'Magma Tower', reqBase: { 'Earth_1': 1, 'Fire_1': 1, 'Earth_2': 1 }, reqCombo: {}, effect: 'Splash + DoT', color: '#B22222', type: 'ATTACK', applyBurn: 3 },
@@ -438,27 +439,6 @@ function populateModals() {
     }
     elHtml += `</div>`;
     document.getElementById('elements-modal-content').innerHTML = elHtml;
-    
-    let waveHtml = `
-        <h3>Wave Scaling</h3>
-        <p>Every wave starts with 10 base enemies. Flawless wave increases count by 1. Leak reduces by 1.</p>
-        <p>Enemies gain Base Armor equal to <strong>Wave Number * 2</strong>.</p>
-        <h3>Enemy Types & Buffs</h3>
-        <ul style="padding-left: 20px;">
-            <li><strong style="color:#00ffff">SHIELD:</strong> Starts with 50% extra HP as a shield.</li>
-            <li><strong style="color:#00ff00">REGEN:</strong> Passively heals 5% max HP per second.</li>
-            <li><strong style="color:#ffffff">DASH:</strong> Gains massive speed boost for 1 second when hit.</li>
-            <li><strong style="color:#ff00ff">IMMUNE:</strong> Immune to Slow/Freeze. Has 50% less Base Armor.</li>
-            <li><strong style="color:#ff8c00">DISARM AURA:</strong> Disables towers within 3 squares range.</li>
-            <li><strong style="color:#1e90ff">SLOW AURA:</strong> Reduces ASPD of towers within 3 squares.</li>
-            <li><strong style="color:#aaaaaa">PHASING:</strong> Temporarily invincible for 2s every 5s, moves 50% slower while active.</li>
-            <li><strong style="color:#2196F3">JUMPER:</strong> Jumps 2-4 squares ahead when HP drops by 20%.</li>
-            <li><strong style="color:#87CEFA">FLYING:</strong> Spawns only after wave 5. Targeted by Air/Hybrid only.</li>
-            <li><strong style="color:#aaa">INVISIBLE:</strong> Appears on Wave 7, 14. Requires True Sight.</li>
-            <li><strong style="color:#ff00ff">BOSS:</strong> Appears every 10 waves. Huge HP, slow speed.</li>
-        </ul>
-    `;
-    document.getElementById('waves-modal-content').innerHTML = waveHtml;
 }
 populateModals();
 
@@ -545,7 +525,9 @@ function precalculateWave() {
 
     waveEnemyQueue = [];
 
-    if (isBossWave) {
+    if (waveNumber <= 5) {
+        for(let i=0; i<totalCount; i++) waveEnemyQueue.push({ isBoss: false, buff: null, isInvis: isInvisWave });
+    } else if (isBossWave) {
         let bossCount = waveNumber >= 30 ? 3 : 2;
         totalCount = bossCount; 
         let shuffledBuffs = [...availableSelfBuffs].sort(() => 0.5 - Math.random());
@@ -801,7 +783,8 @@ function updateUI() {
                 for (let req in r.reqBase) {
                     let p = req.split('_'), name = `${TIERS[p[1]-1]} ${p[0]}`; let needed = r.reqBase[req]; totalReq += needed; matchCount += Math.min(tempPBase[req] || 0, needed);
                     for(let i=0; i<needed; i++) {
-                        if (tempPBase[req] > 0) { reqList.push(`<span style="color:var(--accent); font-weight:bold">${name}</span>`); tempPBase[req]--; } 
+                        if (isStrictlyTemp && state === STATES.BUILD_SELECT && tempTBase[req] > 0) { reqList.push(`<span style="color:#2196F3; font-weight:bold">${name}</span>`); tempTBase[req]--; }
+                        else if (tempPBase[req] > 0) { reqList.push(`<span style="color:var(--accent); font-weight:bold">${name}</span>`); tempPBase[req]--; } 
                         else if (tempTBase[req] > 0) { reqList.push(`<span style="color:#2196F3; font-weight:bold">${name}</span>`); tempTBase[req]--; canCraft = false; } 
                         else { reqList.push(`<span style="color:#777">${name}</span>`); canCraft = false; isFulfilledWithTemp = false; }
                     }
