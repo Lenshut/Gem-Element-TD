@@ -6,8 +6,9 @@
     <title>Maze TD Prototype</title>
     <style>
         :root {
-            --bg: #1a1a1a;
-            --panel: #2a2a2a;
+            /* Changed background to black */
+            --bg: #000000; 
+            --panel: #1a1a1a;
             --text: #eee;
             --accent: #4caf50;
             --danger: #f44336;
@@ -16,7 +17,7 @@
         body {
             margin: 0;
             padding: 20px;
-            background-color: #0f0f0f;
+            background-color: #000000; /* Black background for easier viewing */
             color: var(--text);
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex;
@@ -27,8 +28,8 @@
         #game-container {
             position: relative;
             background-color: var(--bg);
-            border: 2px solid #444;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 2px solid #222;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
         }
         canvas {
             display: block;
@@ -53,7 +54,7 @@
             margin-bottom: 10px;
         }
         .stat-box {
-            background: #222;
+            background: #1a1a1a;
             padding: 10px;
             border-radius: 6px;
             text-align: center;
@@ -84,7 +85,7 @@
         .btn-shop { background-color: #4b0082; color: #fff; border-color: #6a0dad; }
         .btn-shop:hover:not(:disabled) { background-color: #6a0dad; }
         
-        .color-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+        .color-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; border: 1px solid rgba(255,255,255,0.2); }
         
         #detailed-stats {
             display: grid; 
@@ -206,7 +207,7 @@
                 <div class="stat-box">Lives <div class="stat-value" style="color:var(--danger)" id="ui-lives">50</div></div>
                 <div class="stat-box">Gold <div class="stat-value" style="color:var(--gold)" id="ui-gold">30</div></div>
                 <div class="stat-box">Wave <div class="stat-value" id="ui-wave">1</div></div>
-                <div class="stat-box">Builder Lvl <div class="stat-value" id="ui-level">1</div></div>
+                <div class="stat-box">Builder Level <div class="stat-value" id="ui-level">1</div></div>
             </div>
             <div style="margin-bottom:10px;">EXP: <span id="ui-exp">0</span> / <span id="ui-exp-req">10</span></div>
             <button id="btn-levelup" class="btn-accent" disabled>Level Up</button>
@@ -222,7 +223,7 @@
                 </div>
             </div>
 
-            <!-- Moved & Enlarged Start Wave Button -->
+            <!-- Start Wave Button -->
             <button id="btn-startwave" class="btn-accent" style="margin-top:15px; display:none; padding:15px; font-size:1.1em; font-weight:bold; border-radius: 8px;">START WAVE</button>
         </div>
 
@@ -254,7 +255,7 @@
     </div>
 
 <script>
-/** * TOWER DEFENSE PROTOTYPE ENGINE - v8.0 */
+/** * TOWER DEFENSE PROTOTYPE ENGINE - v9.1 (Black BG, Realtime Pathing, Glow) */
 
 // --- CONFIGURATION ---
 const COLS = 24;
@@ -264,12 +265,13 @@ const CANVAS_SIZE = COLS * CELL_SIZE;
 
 const STATES = { BUILD_PLACE: 0, BUILD_SELECT: 1, BUILD_COMBINE: 2, WAVE: 3, GAME_OVER: 4 };
 
+// Updated Element Colors
 const ELEMENTS = {
     EARTH: { name: 'Earth', color: '#8B4513', type: 'GRND', range: 2.5, damage: 15, speed: 60, splash: 1.5 },
-    WATER: { name: 'Water', color: '#1E90FF', type: 'BOTH', range: 3.5, damage: 8, speed: 40, splash: 1.0 },
-    FIRE: { name: 'Fire', color: '#FF4500', type: 'BOTH', range: 3.5, damage: 12, speed: 45, burn: 3 },
-    WIND: { name: 'Wind', color: '#32CD32', type: 'AIR', range: 6.0, damage: 10, speed: 20 }, // True sight is now aura logic
-    ICE: { name: 'Ice', color: '#00FFFF', type: 'BOTH', range: 3.5, damage: 6, speed: 25, slow: 0.3 }
+    WATER: { name: 'Water', color: '#0000FF', type: 'BOTH', range: 3.5, damage: 8, speed: 40, splash: 1.0 },
+    FIRE: { name: 'Fire', color: '#FF0000', type: 'BOTH', range: 3.5, damage: 12, speed: 45, burn: 3 },
+    WIND: { name: 'Wind', color: '#00FF00', type: 'AIR', range: 6.0, damage: 10, speed: 20 }, // True sight is aura
+    ICE: { name: 'Ice', color: '#FFFFFF', type: 'BOTH', range: 3.5, damage: 6, speed: 25, slow: 0.3 }
 };
 
 const TIERS = ["Tiny", "Little", "Normal", "Large", "Huge"];
@@ -290,6 +292,7 @@ const WAYPOINTS = [
 ];
 
 // --- RECIPES (32 Total) ---
+// Silver (#C0C0C0) is Light, Black (#000000) is Dark
 const RECIPES = [
     { id: 'magma', name: 'Magma Tower', reqBase: { 'Earth_1': 1, 'Fire_1': 1, 'Earth_2': 1 }, reqCombo: {}, effect: 'Splash + DoT', color: '#B22222', type: 'ATTACK', applyBurn: 3 },
     { id: 'avalanche', name: 'Avalanche Tower', reqBase: { 'Earth_1': 1, 'Water_2': 1, 'Ice_1': 1 }, reqCombo: {}, effect: 'Splash + Heavy Slow', color: '#4682B4', type: 'ATTACK', applySlow: 0.6 },
@@ -324,9 +327,9 @@ const RECIPES = [
     { id: 'sun', name: 'Sun Strike', reqBase: { 'Fire_3': 1, 'Earth_3': 1, 'Fire_2': 1 }, reqCombo: {}, effect: 'Aura: Heavy Burn (No ATK)', color: '#FF4500', type: 'SUPPORT', auraTarget: 'BURN', auraValue: 20 },
     { id: 'inferno', name: 'Inferno', reqBase: { 'Fire_4': 1, 'Earth_4': 1 }, reqCombo: { 'sun': 1, 'magma': 1 }, effect: 'Aura: Extreme Burn (4-Elem)', color: '#FF0000', type: 'SUPPORT', auraTarget: 'BURN', auraValue: 120 },
     { id: 'volcano', name: 'Volcano Tower', reqBase: { 'Earth_3': 1 }, reqCombo: { 'magma': 1, 'forge': 1 }, effect: 'Insane Splash + DMG Aura', color: '#FF0000', type: 'ATTACK', splashMult: 2.0, dmgMult: 3.0 },
-    { id: 'armageddon', name: 'Armageddon', reqBase: { 'Earth_5': 1, 'Fire_5': 1 }, reqCombo: { 'volcano': 1, 'meteor': 1 }, effect: 'Global Splash Destruction (4-Elem)', color: '#800000', type: 'ATTACK', dmgMult: 15.0, rngMult: 15.0, splashMult: 6.0, spdMult: 1.5 },
+    { id: 'armageddon', name: 'Armageddon', reqBase: { 'Earth_5': 1, 'Fire_5': 1 }, reqCombo: { 'volcano': 1, 'meteor': 1 }, effect: 'Global Splash Destruction (4-Elem, DARK)', color: '#000000', type: 'ATTACK', dmgMult: 15.0, rngMult: 15.0, splashMult: 6.0, spdMult: 1.5 },
     { id: 'tsunami', name: 'Tsunami Tower', reqBase: { 'Water_3': 1 }, reqCombo: { 'avalanche': 1, 'enchant': 1 }, effect: 'Massive Slow + Fast ATK', color: '#0000CD', type: 'ATTACK', applySlow: 0.8, spdMult: 0.5 },
-    { id: 'aegis', name: 'Aegis of Gods', reqBase: { 'Water_4': 1 }, reqCombo: { 'blessing': 1, 'oracle': 1, 'enchant': 1 }, effect: 'Aura: Omni-Buff (4-Elem)', color: '#FFD700', type: 'SUPPORT', auraTarget: 'OMNI', auraValue: 1 }
+    { id: 'aegis', name: 'Aegis of Gods', reqBase: { 'Water_4': 1 }, reqCombo: { 'blessing': 1, 'oracle': 1, 'enchant': 1 }, effect: 'Aura: Omni-Buff (4-Elem, LIGHT)', color: '#C0C0C0', type: 'SUPPORT', auraTarget: 'OMNI', auraValue: 1 }
 ];
 
 // --- MYSTERY SHOP ---
@@ -436,7 +439,7 @@ document.getElementById('btn-restart-yes').addEventListener('click', () => {
 });
 
 // --- PATHFINDING ---
-function isExclusionZone(x, y) { for (let wp of WAYPOINTS) if (x === wp.x && y === wp.y) return true; return false; }
+function isExclusionZone(x, y) { return false; } 
 function getNeighbors(x, y) {
     let n = [];
     if (x > 0 && !grid[y][x-1]) n.push({x: x-1, y: y});
@@ -462,7 +465,7 @@ function calculateFullPath() {
 }
 function canPlace(x, y) {
     if (grid[y][x] !== null) return false;
-    if (isExclusionZone(x, y)) return false; 
+    for (let wp of WAYPOINTS) if (x === wp.x && y === wp.y) return false; // Can't build ON waypoint
     grid[y][x] = 'TEMP'; let path = calculateFullPath(); grid[y][x] = null; 
     return path !== null;
 }
@@ -619,6 +622,19 @@ function updateUI() {
     } else if (state === STATES.WAVE) {
         document.getElementById('phase-title').innerText = "Phase: Defense"; document.getElementById('phase-desc').innerText = `Enemies remaining: ${enemies.length + waveEnemiesToSpawn}`;
         btnStartWave.style.display = 'none';
+    }
+
+    // Process Glows for Ready Combos
+    towers.forEach(t => t.glowColor = null);
+    let globalInv = getTowerInventory();
+    for (let r of RECIPES) {
+        let valid = true;
+        for (let req in r.reqBase) { if ((globalInv.base[req] ? globalInv.base[req].length : 0) < r.reqBase[req]) valid = false; }
+        for (let req in r.reqCombo) { if ((globalInv.combo[req] ? globalInv.combo[req].length : 0) < r.reqCombo[req]) valid = false; }
+        if (valid) {
+            for (let req in r.reqBase) { globalInv.base[req].forEach(t => { if(!t.glowColor) t.glowColor = r.color; }); }
+            for (let req in r.reqCombo) { globalInv.combo[req].forEach(t => { if(!t.glowColor) t.glowColor = r.color; }); }
+        }
     }
 
     let targetTower = null;
@@ -788,7 +804,8 @@ function keepTowerIndex(index) {
     let kept = unrevealedSpawns[index];
     let t = {
         x: kept.x, y: kept.y, element: kept.element, tier: kept.tier, cooldown: 0,
-        isCombo: false, buffs: { damage: 0, speed: 0, crit: 0, range: 0, pierce: 0, trueSight: false, antiCC: false }
+        isCombo: false, buffs: { damage: 0, speed: 0, crit: 0, range: 0, pierce: 0, trueSight: false, antiCC: false },
+        glowColor: null
     };
     calcTowerStats(t); towers.push(t); grid[kept.y][kept.x] = 'TOWER';
     
@@ -834,6 +851,7 @@ function processCombine(baseTower, recipe) {
 
     baseTower.isCombo = true; baseTower.recipe = recipe; baseTower.comboName = recipe.name; baseTower.comboColor = recipe.color; baseTower.tier += 2; 
     baseTower.chain = recipe.chain || 0; baseTower.freezeChc = recipe.freezeChc || 0; baseTower.freezeDur = recipe.freezeDur || 0;
+    baseTower.glowColor = null;
     
     calcTowerStats(baseTower); selectedTower = baseTower; cachedPath = calculateFullPath(); updateUI();
 }
@@ -891,7 +909,9 @@ canvas.addEventListener('click', (e) => {
         if (clickedTower) { selectedTower = clickedTower; selectedStone = null; selectedSpawnIndex = -1; updateUI(); } 
         else if (clickedStone) { selectedStone = clickedStone; selectedTower = null; selectedSpawnIndex = -1; updateUI(); } 
         else if (canPlace(gridX, gridY)) {
-            let roll = rollElement(); unrevealedSpawns.push({x: gridX, y: gridY, element: roll.element, tier: roll.tier, isRevealed: true}); grid[gridY][gridX] = 'TEMP';
+            let roll = rollElement(); unrevealedSpawns.push({x: gridX, y: gridY, element: roll.element, tier: roll.tier, isRevealed: true}); 
+            grid[gridY][gridX] = 'TEMP';
+            cachedPath = calculateFullPath(); // Realtime path update
             selectedTower = null; selectedStone = null; selectedSpawnIndex = -1; updateUI();
             if (unrevealedSpawns.length === 5) { state = STATES.BUILD_SELECT; updateUI(); }
         }
@@ -912,6 +932,41 @@ canvas.addEventListener('click', (e) => {
 // --- RENDER & UPDATE LOOP ---
 function drawRect(x, y, color, sizeRatio = 1.0) {
     let offset = (CELL_SIZE - (CELL_SIZE * sizeRatio)) / 2; ctx.fillStyle = color; ctx.fillRect(x * CELL_SIZE + offset, y * CELL_SIZE + offset, CELL_SIZE * sizeRatio, CELL_SIZE * sizeRatio);
+}
+
+function drawTowerBase(x, y, color, sizeRatio, tier) {
+    let offset = (CELL_SIZE - (CELL_SIZE * sizeRatio)) / 2;
+    let size = CELL_SIZE * sizeRatio;
+    
+    // Base Color
+    ctx.fillStyle = color;
+    ctx.fillRect(x * CELL_SIZE + offset, y * CELL_SIZE + offset, size, size);
+    
+    // Border
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x * CELL_SIZE + offset, y * CELL_SIZE + offset, size, size);
+    
+    // Dice Dots
+    ctx.fillStyle = '#fff';
+    let cx = x * CELL_SIZE + CELL_SIZE/2;
+    let cy = y * CELL_SIZE + CELL_SIZE/2;
+    let dotOffset = size * 0.25;
+    let dotRadius = 1.5 + (sizeRatio * 1);
+    
+    ctx.beginPath();
+    if (tier === 1 || tier === 3 || tier === 5) { 
+        ctx.moveTo(cx, cy); ctx.arc(cx, cy, dotRadius, 0, Math.PI*2); 
+    }
+    if (tier >= 2) { 
+        ctx.moveTo(cx - dotOffset, cy - dotOffset); ctx.arc(cx - dotOffset, cy - dotOffset, dotRadius, 0, Math.PI*2); 
+        ctx.moveTo(cx + dotOffset, cy + dotOffset); ctx.arc(cx + dotOffset, cy + dotOffset, dotRadius, 0, Math.PI*2); 
+    }
+    if (tier >= 4) { 
+        ctx.moveTo(cx + dotOffset, cy - dotOffset); ctx.arc(cx + dotOffset, cy - dotOffset, dotRadius, 0, Math.PI*2); 
+        ctx.moveTo(cx - dotOffset, cy + dotOffset); ctx.arc(cx - dotOffset, cy + dotOffset, dotRadius, 0, Math.PI*2); 
+    }
+    ctx.fill();
 }
 
 function createParticles(x, y, color) { for (let i=0; i<10; i++) particles.push({ x: x, y: y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, life: 20+Math.random()*10, color: color }); }
@@ -1046,8 +1101,22 @@ function gameLoop() {
         }
     }
 
+    // Sparks for special elements
+    for(let t of towers) {
+        if (t.isCombo && (t.comboColor === '#C0C0C0' || t.comboColor === '#000000')) {
+            if (Math.random() < 0.1) {
+                particles.push({
+                    x: t.x * CELL_SIZE + CELL_SIZE/2 + (Math.random()-0.5)*20,
+                    y: t.y * CELL_SIZE + CELL_SIZE/2 + (Math.random()-0.5)*20,
+                    vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2 - 1,
+                    life: 15, color: '#FFD700'
+                });
+            }
+        }
+    }
+
     // DRAW
-    ctx.fillStyle = '#111'; ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     
     if (state === STATES.BUILD_PLACE) {
         ctx.fillStyle = 'rgba(255,0,0,0.1)'; WAYPOINTS.forEach(wp => { ctx.fillRect(wp.x*CELL_SIZE, wp.y*CELL_SIZE, CELL_SIZE, CELL_SIZE); });
@@ -1057,15 +1126,36 @@ function gameLoop() {
     for(let i=0; i<=COLS; i++) { ctx.beginPath(); ctx.moveTo(i*CELL_SIZE, 0); ctx.lineTo(i*CELL_SIZE, CANVAS_SIZE); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, i*CELL_SIZE); ctx.lineTo(CANVAS_SIZE, i*CELL_SIZE); ctx.stroke(); }
 
     if (cachedPath.length > 0) {
-        // Base faint line
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)'; ctx.lineWidth = 10; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
-        for (let i=0; i<cachedPath.length; i++) { let px = cachedPath[i].x * CELL_SIZE + CELL_SIZE/2, py = cachedPath[i].y * CELL_SIZE + CELL_SIZE/2; if(i===0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+        // Base wide line indicating path (very faint for background)
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)'; 
+        ctx.lineWidth = CELL_SIZE; 
+        ctx.lineCap = 'square'; 
+        ctx.lineJoin = 'miter'; 
+        ctx.beginPath();
+        for (let i=0; i<cachedPath.length; i++) { 
+            let px = cachedPath[i].x * CELL_SIZE + CELL_SIZE/2; 
+            let py = cachedPath[i].y * CELL_SIZE + CELL_SIZE/2; 
+            if(i===0) ctx.moveTo(px, py); else ctx.lineTo(px, py); 
+        }
+        ctx.stroke();
+
+        // 20% width solid guide line
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)'; 
+        ctx.lineWidth = CELL_SIZE * 0.2; 
+        ctx.lineCap = 'round'; 
+        ctx.lineJoin = 'round'; 
+        ctx.beginPath();
+        for (let i=0; i<cachedPath.length; i++) { 
+            let px = cachedPath[i].x * CELL_SIZE + CELL_SIZE/2; 
+            let py = cachedPath[i].y * CELL_SIZE + CELL_SIZE/2; 
+            if(i===0) ctx.moveTo(px, py); else ctx.lineTo(px, py); 
+        }
         ctx.stroke();
         
-        // Single animated moving arrow
+        // Single animated moving arrow, 2x faster
         let pathLen = cachedPath.length - 1;
         if (pathLen > 0) {
-            let framesPerCell = 15;
+            let framesPerCell = 2.5; 
             let totalFrames = pathLen * framesPerCell;
             let currentFrame = frames % totalFrames;
             let i = Math.floor(currentFrame / framesPerCell);
@@ -1076,9 +1166,9 @@ function gameLoop() {
             let cy = (p1.y + (p2.y - p1.y) * progress) * CELL_SIZE + CELL_SIZE/2;
             let angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
             
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
             ctx.save(); ctx.translate(cx, cy); ctx.rotate(angle);
-            ctx.beginPath(); ctx.moveTo(-8, -8); ctx.lineTo(10, 0); ctx.lineTo(-8, 8); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(-10, -10); ctx.lineTo(12, 0); ctx.lineTo(-10, 10); ctx.fill();
             ctx.restore();
         }
     }
@@ -1092,7 +1182,8 @@ function gameLoop() {
     for (let s of stones) { drawRect(s.x, s.y, '#333', 0.9); if (selectedStone === s) { ctx.strokeStyle = '#f44336'; ctx.lineWidth = 2; ctx.strokeRect(s.x*CELL_SIZE, s.y*CELL_SIZE, CELL_SIZE, CELL_SIZE); } }
     
     for (let i=0; i<unrevealedSpawns.length; i++) { 
-        let s = unrevealedSpawns[i]; drawRect(s.x, s.y, s.element.color, 0.5+(s.tier*0.1)); 
+        let s = unrevealedSpawns[i]; 
+        drawTowerBase(s.x, s.y, s.element.color, 0.5+(s.tier*0.1), s.tier); 
         if (i === selectedSpawnIndex) { 
             ctx.strokeStyle = 'yellow'; ctx.lineWidth=2; ctx.strokeRect(s.x*CELL_SIZE, s.y*CELL_SIZE, CELL_SIZE, CELL_SIZE); 
             ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.beginPath(); ctx.arc(s.x*CELL_SIZE+CELL_SIZE/2, s.y*CELL_SIZE+CELL_SIZE/2, s.element.range * CELL_SIZE, 0, Math.PI*2); ctx.stroke();
@@ -1101,20 +1192,65 @@ function gameLoop() {
 
     for (let t of towers) {
         let size = Math.min(0.95, 0.5 + (t.tier * 0.08));
-        ctx.fillStyle = t.isCombo ? t.comboColor : t.element.color;
+
+        // Draw glowing aura behind tower if part of ready combo
+        if (t.glowColor) {
+            let pulse = 1.2 + Math.sin(frames * 0.1) * 0.1;
+            ctx.fillStyle = t.glowColor;
+            ctx.globalAlpha = 0.4;
+            ctx.beginPath(); ctx.arc(t.x*CELL_SIZE+CELL_SIZE/2, t.y*CELL_SIZE+CELL_SIZE/2, (CELL_SIZE/2)*pulse, 0, Math.PI*2); ctx.fill();
+            ctx.globalAlpha = 1.0;
+        }
         
         if (t.isCombo) {
-            let cx = t.x * CELL_SIZE + CELL_SIZE/2, cy = t.y * CELL_SIZE + CELL_SIZE/2, r = (CELL_SIZE/2) * size;
-            ctx.beginPath();
-            if (t.recipe && t.recipe.type === 'SUPPORT') { ctx.arc(cx, cy, r*0.8, 0, Math.PI*2); ctx.fill(); } 
-            else { ctx.moveTo(cx, cy-r); ctx.lineTo(cx+r, cy); ctx.lineTo(cx, cy+r); ctx.lineTo(cx-r, cy); ctx.fill(); }
+            let cx = t.x * CELL_SIZE + CELL_SIZE/2, cy = t.y * CELL_SIZE + CELL_SIZE/2, rad = (CELL_SIZE/2) * size;
+            
+            // Base
+            ctx.fillStyle = '#222';
+            ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = t.comboColor; ctx.lineWidth = 2; ctx.stroke();
+            
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(frames * 0.02);
+            
+            if (t.recipe && t.recipe.type === 'SUPPORT') {
+                ctx.strokeStyle = t.comboColor;
+                ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(0, 0, rad * 0.6, 0, Math.PI*2); ctx.stroke();
+                
+                for(let k=0; k<3; k++) {
+                    let a = (k * Math.PI * 2) / 3;
+                    ctx.fillStyle = '#fff';
+                    ctx.beginPath(); ctx.arc(Math.cos(a)*rad*0.6, Math.sin(a)*rad*0.6, 3, 0, Math.PI*2); ctx.fill();
+                }
+                
+                ctx.fillStyle = t.comboColor;
+                ctx.beginPath(); ctx.arc(0, 0, rad * 0.3, 0, Math.PI*2); ctx.fill();
+            } else {
+                ctx.fillStyle = t.comboColor;
+                ctx.beginPath();
+                let spikes = 4;
+                for(let k=0; k<spikes*2; k++) {
+                    let rInner = (k%2===0) ? rad * 0.9 : rad * 0.3;
+                    let a = (k * Math.PI) / spikes;
+                    if(k===0) ctx.moveTo(Math.cos(a)*rInner, Math.sin(a)*rInner);
+                    else ctx.lineTo(Math.cos(a)*rInner, Math.sin(a)*rInner);
+                }
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                ctx.beginPath(); ctx.arc(0, 0, rad * 0.2, 0, Math.PI*2); ctx.fill();
+            }
+            ctx.restore();
+            
         } else {
-            drawRect(t.x, t.y, t.element.color, size);
-            ctx.fillStyle = 'white'; for(let i=0; i<t.tier; i++) ctx.fillRect(t.x*CELL_SIZE + 2 + (i*4), t.y*CELL_SIZE + 2, 3, 3);
+            drawTowerBase(t.x, t.y, t.element.color, size, t.tier);
         }
 
         if (selectedTower === t) {
-            ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(t.x*CELL_SIZE + 1, t.y*CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+            ctx.strokeStyle = '#2196F3'; ctx.lineWidth = 2; ctx.strokeRect(t.x*CELL_SIZE + 1, t.y*CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
             ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.beginPath(); ctx.arc(t.x*CELL_SIZE+CELL_SIZE/2, t.y*CELL_SIZE+CELL_SIZE/2, (t.range+(t.buffs.permRng||0)+t.buffs.range) * CELL_SIZE, 0, Math.PI*2); ctx.stroke();
         }
         
@@ -1124,23 +1260,96 @@ function gameLoop() {
 
     for (let e of enemies) {
         if (e.invisible) { ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.strokeStyle = '#fff'; } 
-        else { ctx.fillStyle = e.isBoss ? '#800080' : (e.type === 'AIR' ? '#ADD8E6' : '#FF0000'); ctx.strokeStyle = 'transparent'; }
+        else { ctx.fillStyle = e.isBoss ? '#800080' : (e.type === 'AIR' ? '#87CEFA' : '#FF0000'); ctx.strokeStyle = '#222'; }
         
-        ctx.beginPath(); let r = e.isBoss ? 14 : 8; ctx.arc(e.x, e.y, r, 0, Math.PI*2); ctx.fill(); if(e.invisible) ctx.stroke();
+        let r = e.isBoss ? 16 : 10; 
+        
+        if (e.type === 'GRND') {
+            ctx.strokeStyle = ctx.fillStyle;
+            ctx.lineWidth = 3;
+            let legExt = r * 1.6;
+            let wiggle = Math.sin(frames * 0.3) * 0.5;
+            ctx.beginPath();
+            for(let j=0; j<4; j++) {
+                let a1 = (j * Math.PI / 2) + Math.PI/4 + wiggle;
+                let a2 = (j * Math.PI / 2) + Math.PI/4 - wiggle;
+                ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + Math.cos(a1)*legExt, e.y + Math.sin(a1)*legExt);
+                ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + Math.cos(a2)*legExt, e.y + Math.sin(a2)*legExt);
+            }
+            if(!e.invisible) ctx.stroke();
+            
+            ctx.fillStyle = '#111';
+            ctx.beginPath(); ctx.arc(e.x, e.y, r, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = e.isBoss ? '#800080' : (e.invisible ? 'rgba(255,255,255,0.3)' : '#FF0000');
+            ctx.beginPath(); ctx.arc(e.x, e.y, r*0.6, 0, Math.PI*2); ctx.fill();
+            if(e.invisible) ctx.stroke();
+        } else {
+            let wingSpan = r * 2.5;
+            let flap = Math.sin(frames * 0.4) * r;
+            ctx.beginPath(); 
+            ctx.moveTo(e.x, e.y);
+            ctx.lineTo(e.x - wingSpan, e.y - flap);
+            ctx.lineTo(e.x - wingSpan/2, e.y + r);
+            ctx.fill();
+            ctx.beginPath(); 
+            ctx.moveTo(e.x, e.y);
+            ctx.lineTo(e.x + wingSpan, e.y - flap);
+            ctx.lineTo(e.x + wingSpan/2, e.y + r);
+            ctx.fill();
+            
+            ctx.fillStyle = '#111';
+            ctx.beginPath(); ctx.arc(e.x, e.y, r*0.8, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = e.isBoss ? '#800080' : (e.invisible ? 'rgba(255,255,255,0.3)' : '#87CEFA');
+            ctx.beginPath(); ctx.arc(e.x, e.y, r*0.4, 0, Math.PI*2); ctx.fill();
+            if(e.invisible) ctx.stroke();
+        }
         
         if (e.freezeTimer > 0) { ctx.fillStyle = 'rgba(0,255,255,0.5)'; ctx.fillRect(e.x-r, e.y-r, r*2, r*2); }
         if (e.buffs.includes('SHIELD') && e.shield > 0) { ctx.strokeStyle = '#00ffff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(e.x, e.y, r + 3, 0, Math.PI*2); ctx.stroke(); }
         if (e.buffs.includes('REGEN')) { ctx.fillStyle = '#00ff00'; ctx.fillRect(e.x - 2, e.y - 2, 4, 4); }
-        if (e.buffs.includes('DASH') && e.dashTimer > 0) { ctx.strokeStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x - (e.speed * 4), e.y); ctx.stroke(); }
+        if (e.buffs.includes('DASH') && e.dashTimer > 0) { ctx.strokeStyle = '#ffffff'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x - (e.speed * 4), e.y); ctx.stroke(); }
         if (e.buffs.includes('IMMUNE')) { ctx.fillStyle = '#ff00ff'; ctx.fillRect(e.x - 4, e.y - 4, 8, 8); }
         
-        if (e.buffs.includes('DISARM_AURA')) { ctx.strokeStyle = 'rgba(255, 140, 0, 0.4)'; ctx.beginPath(); ctx.arc(e.x, e.y, 3*CELL_SIZE, 0, Math.PI*2); ctx.stroke(); }
-        if (e.buffs.includes('SLOW_AURA')) { ctx.strokeStyle = 'rgba(30, 144, 255, 0.4)'; ctx.beginPath(); ctx.arc(e.x, e.y, 3*CELL_SIZE, 0, Math.PI*2); ctx.stroke(); }
+        if (e.buffs.includes('DISARM_AURA')) { ctx.strokeStyle = 'rgba(255, 140, 0, 0.4)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(e.x, e.y, 3*CELL_SIZE, 0, Math.PI*2); ctx.stroke(); }
+        if (e.buffs.includes('SLOW_AURA')) { ctx.strokeStyle = 'rgba(30, 144, 255, 0.4)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(e.x, e.y, 3*CELL_SIZE, 0, Math.PI*2); ctx.stroke(); }
 
-        let hpY = e.y - r - 6; ctx.fillStyle = 'red'; ctx.fillRect(e.x - 10, hpY, 20, 4); ctx.fillStyle = 'lime'; ctx.fillRect(e.x - 10, hpY, 20 * (e.hp/e.maxHp), 4);
+        let hpY = e.y - r - 8; ctx.fillStyle = 'red'; ctx.fillRect(e.x - 12, hpY, 24, 4); ctx.fillStyle = 'lime'; ctx.fillRect(e.x - 12, hpY, 24 * (e.hp/e.maxHp), 4);
     }
 
-    for (let p of projectiles) { ctx.fillStyle = p.tower.isCombo ? p.tower.comboColor : p.tower.element.color; if (p.tower.chain > 0) ctx.fillStyle = '#E0FFFF'; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill(); }
+    for (let p of projectiles) { 
+        if (p.tower.isCombo) {
+            let dx = p.target.x - p.x;
+            let dy = p.target.y - p.y;
+            let angle = Math.atan2(dy, dx);
+            
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(angle);
+            
+            ctx.fillStyle = p.tower.comboColor;
+            if (p.tower.chain > 0) ctx.fillStyle = '#E0FFFF';
+            
+            ctx.shadowColor = ctx.fillStyle;
+            ctx.shadowBlur = 10;
+            
+            ctx.beginPath();
+            ctx.moveTo(10, 0);
+            ctx.lineTo(-5, 5);
+            ctx.lineTo(-2, 0);
+            ctx.lineTo(-5, -5);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.shadowBlur = 0;
+            ctx.restore();
+            
+            if (frames % 2 === 0) particles.push({ x: p.x, y: p.y, vx: 0, vy: 0, life: 10, color: ctx.fillStyle });
+        } else {
+            ctx.fillStyle = p.tower.element.color; 
+            ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill(); 
+        }
+    }
+    
     for (let pt of particles) { ctx.fillStyle = pt.color; ctx.globalAlpha = pt.life / 30; ctx.fillRect(pt.x, pt.y, 3, 3); }
     ctx.globalAlpha = 1.0;
 
