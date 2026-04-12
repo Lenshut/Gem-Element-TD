@@ -271,7 +271,7 @@ const ELEMENTS = {
     WATER: { name: 'Water', color: '#0000FF', type: 'BOTH', range: 3.5, damage: 8, speed: 40, splash: 1.0 },
     FIRE: { name: 'Fire', color: '#FF0000', type: 'BOTH', range: 3.5, damage: 12, speed: 45, burn: 3 },
     WIND: { name: 'Wind', color: '#00FF00', type: 'AIR', range: 6.0, damage: 10, speed: 20 }, // True sight is aura
-    ICE: { name: 'Ice', color: '#FFFFFF', type: 'BOTH', range: 3.5, damage: 6, speed: 25, slow: 0.3 }
+    ICE: { name: 'Ice', color: '#00CED1', type: 'BOTH', range: 3.5, damage: 6, speed: 25, slow: 0.3 } // Changed to Tosca/Light blue
 };
 
 const TIERS = ["Tiny", "Little", "Normal", "Large", "Huge"];
@@ -949,6 +949,8 @@ function drawTowerBase(x, y, color, sizeRatio, tier) {
     
     // Dice Dots
     ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
     let cx = x * CELL_SIZE + CELL_SIZE/2;
     let cy = y * CELL_SIZE + CELL_SIZE/2;
     let dotOffset = size * 0.25;
@@ -956,17 +958,18 @@ function drawTowerBase(x, y, color, sizeRatio, tier) {
     
     ctx.beginPath();
     if (tier === 1 || tier === 3 || tier === 5) { 
-        ctx.moveTo(cx, cy); ctx.arc(cx, cy, dotRadius, 0, Math.PI*2); 
+        ctx.moveTo(cx + dotRadius, cy); ctx.arc(cx, cy, dotRadius, 0, Math.PI*2); 
     }
     if (tier >= 2) { 
-        ctx.moveTo(cx - dotOffset, cy - dotOffset); ctx.arc(cx - dotOffset, cy - dotOffset, dotRadius, 0, Math.PI*2); 
-        ctx.moveTo(cx + dotOffset, cy + dotOffset); ctx.arc(cx + dotOffset, cy + dotOffset, dotRadius, 0, Math.PI*2); 
+        ctx.moveTo(cx - dotOffset + dotRadius, cy - dotOffset); ctx.arc(cx - dotOffset, cy - dotOffset, dotRadius, 0, Math.PI*2); 
+        ctx.moveTo(cx + dotOffset + dotRadius, cy + dotOffset); ctx.arc(cx + dotOffset, cy + dotOffset, dotRadius, 0, Math.PI*2); 
     }
     if (tier >= 4) { 
-        ctx.moveTo(cx + dotOffset, cy - dotOffset); ctx.arc(cx + dotOffset, cy - dotOffset, dotRadius, 0, Math.PI*2); 
-        ctx.moveTo(cx - dotOffset, cy + dotOffset); ctx.arc(cx - dotOffset, cy + dotOffset, dotRadius, 0, Math.PI*2); 
+        ctx.moveTo(cx + dotOffset + dotRadius, cy - dotOffset); ctx.arc(cx + dotOffset, cy - dotOffset, dotRadius, 0, Math.PI*2); 
+        ctx.moveTo(cx - dotOffset + dotRadius, cy + dotOffset); ctx.arc(cx - dotOffset, cy + dotOffset, dotRadius, 0, Math.PI*2); 
     }
     ctx.fill();
+    ctx.stroke();
 }
 
 function createParticles(x, y, color) { for (let i=0; i<10; i++) particles.push({ x: x, y: y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, life: 20+Math.random()*10, color: color }); }
