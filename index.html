@@ -118,11 +118,7 @@
             border-left: 4px solid var(--accent);
             transition: 0.2s;
         }
-        .recipe-hint:hover.clickable-recipe {
-            background-color: #333 !important;
-            transform: scale(1.02);
-            cursor: pointer;
-        }
+        .recipe-hint:hover.clickable-recipe { transform: scale(1.02); cursor: pointer; }
         
         #global-tooltip {
             display: none;
@@ -137,7 +133,6 @@
             font-family: monospace;
             font-size: 0.95em;
             box-shadow: 0 10px 25px rgba(0,0,0,0.9);
-            pointer-events: none;
             text-align: center;
             line-height: 1.4;
         }
@@ -188,7 +183,7 @@
 
     <div id="global-tooltip"></div>
 
-    <div id="game-container"><canvas id="gameCanvas" width="1152" height="1152"></canvas></div>
+    <div id="game-container"><canvas id="gameCanvas" width="1024" height="1024"></canvas></div>
 
     <div id="ui-panel">
         <div class="card">
@@ -234,16 +229,19 @@
         </div>
 
         <div class="card" id="shop-panel">
-            <h3 style="margin-top:0; color:var(--gold);">Mystery Shop</h3>
-            <div style="font-size:0.85em; color:#aaa; margin-bottom:10px;">Select an object or buy global buffs!</div>
+            <h3 style="margin-top:0; color:var(--gold); display:flex; justify-content:space-between; align-items:center;">
+                Mystery Shop
+                <button id="btn-refresh-shop" class="btn-accent" style="width:auto; padding: 4px 8px; font-size:0.7em; margin:0;">Refresh (10g)</button>
+            </h3>
+            <div style="font-size:0.85em; color:#aaa; margin-bottom:10px;">Refreshes every 5 waves. Select a tower to apply buffs!</div>
             <div id="shop-items" style="max-height: 200px; overflow-y: auto; padding-right: 5px;"></div>
         </div>
     </div>
 
 <script>
-/** * TOWER DEFENSE PROTOTYPE ENGINE - v15.0 (36x36 Expansion & Insta-Craft Logic) */
+/** * TOWER DEFENSE PROTOTYPE ENGINE - v16.1 (Insta-Craft Visual Bug Fix) */
 
-const COLS = 36, ROWS = 36, CELL_SIZE = 32, CANVAS_SIZE = COLS * CELL_SIZE;
+const COLS = 32, ROWS = 32, CELL_SIZE = 32, CANVAS_SIZE = COLS * CELL_SIZE;
 const STATES = { BUILD_PLACE: 0, BUILD_SELECT: 1, BUILD_COMBINE: 2, WAVE: 3, GAME_OVER: 4, SWAPPING: 5 };
 
 let currentMaxSpawns = 5;
@@ -258,7 +256,7 @@ let enemies = [], projectiles = [], particles = [], cachedPath = [];
 let selectedSpawnIndex = -1, selectedTower = null, selectedStone = null;
 let frames = 0, waveEnemiesToSpawn = 0;
 let waveEnemyQueue = [], bonusEnemies = 0, leakedThisWave = false;
-let currentShop = [], shopBought = [false, false, false];
+let currentShop = [], shopBought = [false, false, false, false];
 let floatingTexts = [];
 let arrowTrail = [];
 let waveClearTimer = 0;
@@ -279,8 +277,8 @@ const SPAWN_CHANCES = [
 ];
 const EXP_REQ = [0, 10, 16, 28, 42, 60, 85, 115, 150, 200]; 
 
-// Updated for 36x36 Grid
-const WAYPOINTS = [{x:1, y:1}, {x:1, y:17}, {x:33, y:17}, {x:33, y:1}, {x:17, y:1}, {x:17, y:33}, {x:33, y:33}];
+// Adjusted for 32x32 Grid
+const WAYPOINTS = [{x:1, y:1}, {x:1, y:15}, {x:29, y:15}, {x:29, y:1}, {x:15, y:1}, {x:15, y:29}, {x:29, y:29}];
 
 const RECIPES = [
     { id: 'magma', name: 'Magma Tower', reqBase: { 'Earth_1': 1, 'Fire_1': 1, 'Earth_2': 1 }, reqCombo: {}, effect: 'Splash + DoT', color: '#B22222', type: 'ATTACK', applyBurn: 3 },
@@ -335,15 +333,11 @@ const RECIPES = [
     { id: 'medusa', name: 'Medusa', reqBase: { 'Earth_3': 1, 'Water_3': 1, 'Ice_2': 1 }, reqCombo: {}, effect: 'Poison + Freeze Chance', color: '#8FBC8F', type: 'ATTACK', applyPoison: 8, freezeChc: 0.3, freezeDur: 90 },
     { id: 'paladin', name: 'Paladin', reqBase: { 'Water_2': 1, 'Fire_2': 1, 'Earth_2': 1 }, reqCombo: {}, effect: 'Aura: Anti-CC for Allies', color: '#DAA520', type: 'SUPPORT', auraTarget: 'ANTI_CC', auraValue: 1 },
     { id: 'timebender', name: 'Timebender', reqBase: { 'Wind_4': 1, 'Ice_4': 1 }, reqCombo: {}, effect: 'Fast Stun + Slow Enemy Aura', color: '#D8BFD8', type: 'ATTACK', stunChc: 0.4, stunDur: 180, auraTarget: 'SLOW_ENEMY', auraValue: 0.5, spdMult: 0.2 },
-    
-    // Light Towers (Any 5 of the same element, T1-T5)
     { id: 'light_earth', name: 'Light Tower', reqBase: { 'Earth_1': 1, 'Earth_2': 1, 'Earth_3': 1, 'Earth_4': 1, 'Earth_5': 1 }, reqCombo: {}, effect: 'Global RNG + High DMG + Stun', color: '#FFFFCC', type: 'ATTACK', rngMult: 15.0, dmgMult: 12.0, stunChc: 0.5, stunDur: 150, unique: true },
     { id: 'light_water', name: 'Light Tower', reqBase: { 'Water_1': 1, 'Water_2': 1, 'Water_3': 1, 'Water_4': 1, 'Water_5': 1 }, reqCombo: {}, effect: 'Global RNG + High DMG + Stun', color: '#FFFFCC', type: 'ATTACK', rngMult: 15.0, dmgMult: 12.0, stunChc: 0.5, stunDur: 150, unique: true },
     { id: 'light_fire', name: 'Light Tower', reqBase: { 'Fire_1': 1, 'Fire_2': 1, 'Fire_3': 1, 'Fire_4': 1, 'Fire_5': 1 }, reqCombo: {}, effect: 'Global RNG + High DMG + Stun', color: '#FFFFCC', type: 'ATTACK', rngMult: 15.0, dmgMult: 12.0, stunChc: 0.5, stunDur: 150, unique: true },
     { id: 'light_wind', name: 'Light Tower', reqBase: { 'Wind_1': 1, 'Wind_2': 1, 'Wind_3': 1, 'Wind_4': 1, 'Wind_5': 1 }, reqCombo: {}, effect: 'Global RNG + High DMG + Stun', color: '#FFFFCC', type: 'ATTACK', rngMult: 15.0, dmgMult: 12.0, stunChc: 0.5, stunDur: 150, unique: true },
     { id: 'light_ice', name: 'Light Tower', reqBase: { 'Ice_1': 1, 'Ice_2': 1, 'Ice_3': 1, 'Ice_4': 1, 'Ice_5': 1 }, reqCombo: {}, effect: 'Global RNG + High DMG + Stun', color: '#FFFFCC', type: 'ATTACK', rngMult: 15.0, dmgMult: 12.0, stunChc: 0.5, stunDur: 150, unique: true },
-
-    // Dark Tower
     { id: 'dark', name: 'Dark Tower', reqBase: { 'Earth_5': 1, 'Water_5': 1, 'Fire_5': 1, 'Wind_5': 1, 'Ice_5': 1 }, reqCombo: {}, effect: 'Global RNG + Multi 5 + Omni Aura', color: '#4B0082', type: 'ATTACK', rngMult: 15.0, dmgMult: 8.0, multiTarget: 5, auraTarget: 'DARK_OMNI', unique: true }
 ];
 
@@ -412,25 +406,19 @@ function populateModals() {
     let uniqueRecipes = [];
     let seenNames = new Set();
     for (let r of RECIPES) {
-        if (!seenNames.has(r.name)) {
-            seenNames.add(r.name);
-            uniqueRecipes.push(r);
-        }
+        if (!seenNames.has(r.name)) { seenNames.add(r.name); uniqueRecipes.push(r); }
     }
     
     elHtml += `<h3 style="border-bottom: 2px solid #555; padding-bottom: 5px; color: var(--gold);">Tower Combinations (${uniqueRecipes.length} Unique)</h3>`;
     elHtml += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px;">`;
     for (let r of uniqueRecipes) {
         let reqs = [];
-        if (r.name === 'Light Tower') {
-            reqs.push(`1x T1-T5 Any Same Element`);
-        } else if (r.name === 'Dark Tower') {
-            reqs.push(`1x T5 All 5 Elements`);
-        } else {
+        if (r.name === 'Light Tower') { reqs.push(`1x T1-T5 Any Same Element`); } 
+        else if (r.name === 'Dark Tower') { reqs.push(`1x T5 All 5 Elements`); } 
+        else {
             for (let req in r.reqBase) reqs.push(`${r.reqBase[req]}x T${req.split('_')[1]} ${req.split('_')[0]}`);
             for (let req in r.reqCombo) reqs.push(`${r.reqCombo[req]}x ${RECIPES.find(x=>x.id===req).name}`);
         }
-        
         elHtml += `<div style="background: #222; padding: 10px; border-radius: 6px; border-left: 4px solid ${r.color};">
             <strong style="color:${r.color}; font-size: 1.1em;">${r.name}</strong>
             <div style="color: var(--gold); font-size: 0.9em; margin-bottom: 5px;">${r.effect}</div>
@@ -442,36 +430,22 @@ function populateModals() {
 }
 populateModals();
 
-// --- MENU CONTROLS ---
 const btnMenu = document.getElementById('btn-menu');
 const menuDropdown = document.getElementById('menu-dropdown');
 
-btnMenu.addEventListener('click', (e) => {
-    e.stopPropagation();
-    menuDropdown.style.display = menuDropdown.style.display === 'block' ? 'none' : 'block';
-});
-
-document.addEventListener('click', (e) => {
-    if (!btnMenu.contains(e.target) && !menuDropdown.contains(e.target)) {
-        menuDropdown.style.display = 'none';
+btnMenu.addEventListener('click', (e) => { e.stopPropagation(); menuDropdown.style.display = menuDropdown.style.display === 'block' ? 'none' : 'block'; });
+document.addEventListener('click', (e) => { 
+    if (!btnMenu.contains(e.target) && !menuDropdown.contains(e.target)) menuDropdown.style.display = 'none'; 
+    let gt = document.getElementById('global-tooltip');
+    if (gt.style.display === 'block' && !e.target.closest('.recipe-hint') && !e.target.closest('#global-tooltip')) {
+        gt.style.display = 'none'; gt.dataset.activeRecipe = "";
     }
 });
 
-document.getElementById('btn-restart').addEventListener('click', () => { 
-    menuDropdown.style.display = 'none'; 
-    document.getElementById('restart-modal').style.display = 'flex'; 
-});
-document.getElementById('btn-elements').addEventListener('click', () => { 
-    menuDropdown.style.display = 'none'; 
-    document.getElementById('elements-modal').style.display = 'flex'; 
-});
-document.getElementById('btn-waves').addEventListener('click', () => { 
-    menuDropdown.style.display = 'none'; 
-    document.getElementById('waves-modal').style.display = 'flex'; 
-});
-document.getElementById('btn-restart-no').addEventListener('click', () => { 
-    document.getElementById('restart-modal').style.display = 'none'; 
-});
+document.getElementById('btn-restart').addEventListener('click', () => { menuDropdown.style.display = 'none'; document.getElementById('restart-modal').style.display = 'flex'; });
+document.getElementById('btn-elements').addEventListener('click', () => { menuDropdown.style.display = 'none'; document.getElementById('elements-modal').style.display = 'flex'; });
+document.getElementById('btn-waves').addEventListener('click', () => { menuDropdown.style.display = 'none'; document.getElementById('waves-modal').style.display = 'flex'; });
+document.getElementById('btn-restart-no').addEventListener('click', () => { document.getElementById('restart-modal').style.display = 'none'; });
 
 document.getElementById('btn-restart-yes').addEventListener('click', () => {
     document.getElementById('restart-modal').style.display = 'none';
@@ -482,6 +456,10 @@ document.getElementById('btn-restart-yes').addEventListener('click', () => {
     selectedSpawnIndex = -1; selectedTower = null; selectedStone = null;
     frames = 0; waveEnemiesToSpawn = 0; bonusEnemies = 0;
     precalculateWave(); refreshShop(); cachedPath = calculateFullPath(); updateUI();
+});
+
+document.getElementById('btn-refresh-shop').addEventListener('click', () => {
+    if (gold >= 10 && state !== STATES.WAVE) { gold -= 10; refreshShop(); updateUI(); }
 });
 
 function isExclusionZone(x, y) { return false; } 
@@ -526,7 +504,7 @@ function precalculateWave() {
     waveEnemyQueue = [];
 
     if (waveNumber <= 5) {
-        for(let i=0; i<totalCount; i++) waveEnemyQueue.push({ isBoss: false, buff: null, isInvis: isInvisWave });
+        for(let i=0; i<totalCount; i++) waveEnemyQueue.push({ isBoss: false, buff: null, isInvis: false });
     } else if (isBossWave) {
         let bossCount = waveNumber >= 30 ? 3 : 2;
         totalCount = bossCount; 
@@ -567,7 +545,7 @@ function precalculateWave() {
 
     let infoText = `Wave ${waveNumber} - ${totalCount} Enemies`;
     if (isBossWave) infoText += ` <span style="color:#ff00ff">[BOSS]</span>`;
-    if (isInvisWave && !isBossWave) infoText += ` <span style="color:#aaa">[INVISIBLE]</span>`;
+    if (isInvisWave && !isBossWave && waveNumber > 5) infoText += ` <span style="color:#aaa">[INVISIBLE]</span>`;
     let uniqueBuffs = [...new Set(waveEnemyQueue.map(e => e.buff).filter(b => b))];
     if (uniqueBuffs.length > 0) infoText += `<br><span style="color:#ccc; font-weight:normal">Traits: ${uniqueBuffs.join(', ')}</span>`;
     document.getElementById('next-wave-info').innerHTML = infoText;
@@ -575,11 +553,11 @@ function precalculateWave() {
 
 function refreshShop() {
     let pool = [...SHOP_POOL]; currentShop = [];
-    for(let i=0; i<3; i++) {
+    for(let i=0; i<4; i++) {
         let idx = Math.floor(Math.random() * pool.length);
         currentShop.push(pool[idx]); pool.splice(idx, 1);
     }
-    shopBought = [false, false, false];
+    shopBought = [false, false, false, false];
 }
 
 function calcTowerStats(t) {
@@ -808,31 +786,42 @@ function updateUI() {
                 let sim = { element: targetTower.element, tier: targetTower.tier + 2, isCombo: true, recipe: r, buffs: { damage: 0, speed: 0, crit: 0, range: 0, pierce: 0, trueSight: false, antiCC: false } };
                 calcTowerStats(sim);
                 
-                div.onmouseenter = (e) => {
-                    let gt = document.getElementById('global-tooltip');
-                    gt.innerHTML = `<strong style="color:${r.color}">${r.name} Stats</strong><br>DMG: ${sim.baseDamage.toFixed(1)} | SPD: ${sim.baseSpeed.toFixed(1)} | RNG: ${sim.range.toFixed(1)}<br>CRT: ${Math.floor(sim.baseCrit*100)}% | SPL: ${sim.splash} | A/G: ${sim.element.type}<br><span style="color:var(--gold)">Effect: ${r.effect}</span>`;
-                    gt.style.display = 'block';
-                    let rect = div.getBoundingClientRect();
-                    gt.style.top = rect.top + 'px';
-                    gt.style.left = (rect.left - gt.offsetWidth - 10) + 'px';
-                };
-                div.onmouseleave = () => { document.getElementById('global-tooltip').style.display = 'none'; };
-
+                let craftAction = null;
                 let htmlStr = `<strong style="color:${canCraft ? 'var(--gold)' : (isStrictlyTemp && state === STATES.BUILD_SELECT ? '#2196F3' : (isFulfilledWithTemp ? '#2196F3' : '#fff'))}; font-size:1.1em;">${r.name}</strong><br><div style="margin-top:4px;">${reqList.join(' <span style="color:#555">+</span> ')}</div>`;
                 
                 if (canCraft && state === STATES.BUILD_COMBINE && selectedTower && towers.includes(selectedTower)) {
                     div.classList.add('clickable-recipe');
-                    htmlStr += `<div style="color:var(--gold); font-weight:bold; font-size:0.95em; display:block; margin-top:8px; text-align:center; background: rgba(255,215,0,0.1); padding:4px; border-radius:4px;">✦ CLICK TO CRAFT ✦</div>`;
-                    div.onclick = () => { document.getElementById('global-tooltip').style.display = 'none'; processCombine(selectedTower, r); };
+                    htmlStr += `<div style="color:var(--gold); font-weight:bold; font-size:0.95em; display:block; margin-top:8px; text-align:center; background: rgba(255,215,0,0.1); padding:4px; border-radius:4px;">✦ TAP TO VIEW ✦</div>`;
+                    craftAction = () => { document.getElementById('global-tooltip').style.display = 'none'; processCombine(selectedTower, r); };
                 } else if (isStrictlyTemp && state === STATES.BUILD_SELECT && selectedSpawnIndex >= 0) {
                     div.classList.add('clickable-recipe'); div.style.borderColor = '#2196F3';
-                    htmlStr += `<div style="color:#2196F3; font-weight:bold; font-size:0.95em; display:block; margin-top:8px; text-align:center; background: rgba(33,150,243,0.1); padding:4px; border-radius:4px;">✦ INSTA-CRAFT FROM TEMPS ✦</div>`;
-                    div.onclick = () => { document.getElementById('global-tooltip').style.display = 'none'; processTempCombine(selectedSpawnIndex, r); };
+                    htmlStr += `<div style="color:#2196F3; font-weight:bold; font-size:0.95em; display:block; margin-top:8px; text-align:center; background: rgba(33,150,243,0.1); padding:4px; border-radius:4px;">✦ TAP TO VIEW ✦</div>`;
+                    craftAction = () => { document.getElementById('global-tooltip').style.display = 'none'; processTempCombine(selectedSpawnIndex, r); };
                 } else if (isFulfilledWithTemp) {
                     htmlStr += `<div style="color:#2196F3; font-weight:bold; font-size:0.85em; display:block; margin-top:8px; text-align:center;">Keep elements to craft!</div>`;
                 }
-                
                 div.innerHTML = htmlStr;
+
+                div.onclick = (e) => {
+                    e.stopPropagation();
+                    let gt = document.getElementById('global-tooltip');
+                    if (gt.dataset.activeRecipe === r.id && craftAction) { craftAction(); gt.dataset.activeRecipe = ""; return; }
+                    
+                    gt.dataset.activeRecipe = r.id;
+                    let tooltipContent = `<strong style="color:${r.color}">${r.name} Stats</strong><br>DMG: ${sim.baseDamage.toFixed(1)} | SPD: ${sim.baseSpeed.toFixed(1)} | RNG: ${sim.range.toFixed(1)}<br>CRT: ${Math.floor(sim.baseCrit*100)}% | SPL: ${sim.splash} | A/G: ${sim.element.type}<br><span style="color:var(--gold)">Effect: ${r.effect}</span>`;
+                    if (craftAction) { tooltipContent += `<div style="margin-top: 10px; background: var(--accent); color: #000; padding: 5px; border-radius: 4px; font-weight: bold; cursor: pointer; text-align:center;">TAP HERE OR RECIPE AGAIN TO CRAFT</div>`; }
+                    gt.innerHTML = tooltipContent;
+                    gt.style.display = 'block';
+                    
+                    gt.onclick = (ev) => { ev.stopPropagation(); if(craftAction) { craftAction(); gt.style.display = 'none'; gt.dataset.activeRecipe = ""; } };
+
+                    let rect = div.getBoundingClientRect();
+                    gt.style.top = Math.max(10, rect.top - 120) + 'px';
+                    gt.style.left = Math.max(10, rect.left - 200) + 'px';
+                    if (window.innerWidth < 600) { gt.style.left = '50%'; gt.style.transform = 'translateX(-50%)'; } 
+                    else { gt.style.transform = 'none'; }
+                };
+                
                 recipeNodes.push({ dom: div, score: score, r: r, canCraft: canCraft, isStrictlyTemp: isStrictlyTemp });
             }
         }
@@ -852,31 +841,40 @@ function updateUI() {
     const sItems = document.getElementById('shop-items'); sItems.innerHTML = '';
     currentShop.forEach((item, idx) => {
         let btn = document.createElement('button'); btn.className = 'btn-shop';
-        btn.innerHTML = `<strong>${item.name}</strong><br><span style="font-size:0.8em">${item.desc}</span><br><span style="color:var(--gold)">${item.cost} Gold</span>`;
         
-        let target = selectedTower || selectedStone;
-        let btnDisabled = shopBought[idx] || gold < item.cost || state === STATES.WAVE || state === STATES.SWAPPING;
-        
-        if (item.type === 'TOWER') { if (!selectedTower || !towers.includes(selectedTower)) btnDisabled = true; } 
-        else if (item.type === 'SWAP') { if (!target || selectedSpawnIndex >= 0) btnDisabled = true; }
-        else if (item.id === 'redo' && (state !== STATES.BUILD_PLACE && state !== STATES.BUILD_SELECT || unrevealedSpawns.length === 0)) btnDisabled = true;
+        if (shopBought[idx]) {
+            btn.innerHTML = `<strong>SOLD OUT</strong>`;
+            btn.disabled = true;
+            btn.style.backgroundColor = '#222';
+            btn.style.borderColor = '#444';
+            btn.style.color = '#777';
+        } else {
+            btn.innerHTML = `<strong>${item.name}</strong><br><span style="font-size:0.8em">${item.desc}</span><br><span style="color:var(--gold)">${item.cost} Gold</span>`;
+            let target = selectedTower || selectedStone;
+            let btnDisabled = gold < item.cost || state === STATES.WAVE || state === STATES.SWAPPING;
+            
+            if (item.type === 'TOWER') { if (!selectedTower || !towers.includes(selectedTower)) btnDisabled = true; } 
+            else if (item.type === 'SWAP') { if (!target || selectedSpawnIndex >= 0) btnDisabled = true; }
+            else if (item.id === 'redo' && (state !== STATES.BUILD_PLACE && state !== STATES.BUILD_SELECT || unrevealedSpawns.length === 0)) btnDisabled = true;
 
-        btn.disabled = btnDisabled;
-        btn.onclick = () => { 
-            if (btn.disabled) return;
-            let success = false;
-            if (item.type === 'TOWER') success = item.apply(selectedTower);
-            else if (item.type === 'SWAP') success = item.apply(target);
-            else if (item.type === 'GLOBAL') success = item.apply();
+            btn.disabled = btnDisabled;
+            btn.onclick = () => { 
+                if (btn.disabled) return;
+                let success = false;
+                if (item.type === 'TOWER') success = item.apply(selectedTower);
+                else if (item.type === 'SWAP') success = item.apply(target);
+                else if (item.type === 'GLOBAL') success = item.apply();
 
-            if (success) { 
-                gold -= item.cost; shopBought[idx] = true; 
-                if (item.type === 'TOWER' && selectedTower) calcTowerStats(selectedTower); 
-                updateUI(); 
-            } 
-        };
+                if (success) { 
+                    gold -= item.cost; shopBought[idx] = true; 
+                    if (item.type === 'TOWER' && selectedTower) calcTowerStats(selectedTower); 
+                    updateUI(); 
+                } 
+            };
+        }
         sItems.appendChild(btn);
     });
+    document.getElementById('btn-refresh-shop').disabled = (gold < 10 || state === STATES.WAVE);
 }
 
 function rollElement() {
@@ -899,7 +897,6 @@ function keepTowerIndex(index) {
         if (i !== index) { let s = unrevealedSpawns[i]; stones.push({x: s.x, y: s.y}); grid[s.y][s.x] = 'STONE'; }
     }
     unrevealedSpawns = []; selectedSpawnIndex = -1; cachedPath = calculateFullPath(); state = STATES.BUILD_COMBINE;
-    if (waveNumber % 3 === 1) refreshShop();
     updateUI();
 }
 
@@ -943,14 +940,7 @@ function processCombine(baseTower, recipe) {
 
 function processTempCombine(selectedIndex, recipe) {
     let baseSpawn = unrevealedSpawns[selectedIndex];
-    let consumed = [], nBase = { ...recipe.reqBase };
-    for (let req in nBase) {
-        for (let i = 0; i < nBase[req]; i++) {
-            let foundIdx = unrevealedSpawns.findIndex((s, idx) => !consumed.includes(idx) && `${s.element.name}_${s.tier}` === req);
-            consumed.push(foundIdx);
-        }
-    }
-
+    
     let newTower = { x: baseSpawn.x, y: baseSpawn.y, element: baseSpawn.element, tier: baseSpawn.tier, cooldown: 0, isCombo: false, buffs: { damage: 0, speed: 0, crit: 0, range: 0, pierce: 0, trueSight: false, antiCC: false }, glowColor: null };
     newTower.isCombo = true; newTower.recipe = recipe; newTower.comboName = recipe.name; newTower.comboColor = recipe.color; newTower.tier += 2; 
     newTower.chain = recipe.chain || 0; newTower.freezeChc = recipe.freezeChc || 0; newTower.freezeDur = recipe.freezeDur || 0;
@@ -958,10 +948,14 @@ function processTempCombine(selectedIndex, recipe) {
     calcTowerStats(newTower); towers.push(newTower); grid[baseSpawn.y][baseSpawn.x] = 'TOWER';
 
     for (let i = 0; i < unrevealedSpawns.length; i++) {
-        if (!consumed.includes(i)) { let s = unrevealedSpawns[i]; stones.push({x: s.x, y: s.y}); grid[s.y][s.x] = 'STONE'; }
+        if (i !== selectedIndex) { 
+            let s = unrevealedSpawns[i]; 
+            stones.push({x: s.x, y: s.y}); 
+            grid[s.y][s.x] = 'STONE'; 
+        }
     }
     unrevealedSpawns = []; selectedSpawnIndex = -1; selectedTower = newTower; cachedPath = calculateFullPath(); state = STATES.BUILD_COMBINE;
-    if (waveNumber % 3 === 1) refreshShop(); updateUI();
+    updateUI();
 }
 
 btnStartWave.addEventListener('click', () => { state = STATES.WAVE; waveSpawnTimer = 0; selectedTower = null; selectedStone = null; updateUI(); });
@@ -1248,7 +1242,8 @@ function gameLoop() {
         if (waveEnemiesToSpawn === 0 && enemies.length === 0 && state === STATES.WAVE) {
             waveClearText = "WAVE " + waveNumber + " CLEARED!";
             waveClearTimer = 120;
-            exp += 2 * (expActive ? 2 : 1); waveNumber++; 
+            exp += 2 * (expActive ? 2 : 1); waveNumber++;
+            if (waveNumber % 5 === 1) refreshShop(); 
             if (!leakedThisWave) bonusEnemies++; else bonusEnemies = Math.max(0, bonusEnemies - 1);
             currentMaxSpawns = 5; midasActive = false; expActive = false; // Reset buffs
             precalculateWave(); state = STATES.BUILD_PLACE;
