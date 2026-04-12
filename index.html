@@ -124,7 +124,6 @@
             cursor: pointer;
         }
         
-        /* Global Tooltip for unobstructed rendering */
         #global-tooltip {
             display: none;
             position: fixed;
@@ -187,7 +186,6 @@
     <div id="elements-modal" class="modal-bg"><div class="modal-content"><div id="elements-modal-content"></div><button class="btn-accent modal-close" onclick="document.getElementById('elements-modal').style.display='none'">Close</button></div></div>
     <div id="waves-modal" class="modal-bg"><div class="modal-content"><div id="waves-modal-content"></div><button class="btn-accent modal-close" onclick="document.getElementById('waves-modal').style.display='none'">Close</button></div></div>
 
-    <!-- Hidden floating tooltip injected via JS -->
     <div id="global-tooltip"></div>
 
     <div id="game-container"><canvas id="gameCanvas" width="768" height="768"></canvas></div>
@@ -243,7 +241,7 @@
     </div>
 
 <script>
-/** * TOWER DEFENSE PROTOTYPE ENGINE - v13.0 (Polished UI & Mechanics) */
+/** * TOWER DEFENSE PROTOTYPE ENGINE - v14.0 (Towers Expansion & Quality Updates) */
 
 const COLS = 24, ROWS = 24, CELL_SIZE = 32, CANVAS_SIZE = COLS * CELL_SIZE;
 const STATES = { BUILD_PLACE: 0, BUILD_SELECT: 1, BUILD_COMBINE: 2, WAVE: 3, GAME_OVER: 4, SWAPPING: 5 };
@@ -335,7 +333,17 @@ const RECIPES = [
     { id: 'shrapnel', name: 'Shrapnel', reqBase: { 'Earth_2': 1, 'Wind_2': 1, 'Water_2': 1 }, reqCombo: {}, effect: 'Splash + Hit 3 Targets', color: '#708090', type: 'ATTACK', splashMult: 1.5, multiTarget: 3 },
     { id: 'medusa', name: 'Medusa', reqBase: { 'Earth_3': 1, 'Water_3': 1, 'Ice_2': 1 }, reqCombo: {}, effect: 'Poison + Freeze Chance', color: '#8FBC8F', type: 'ATTACK', applyPoison: 8, freezeChc: 0.3, freezeDur: 90 },
     { id: 'paladin', name: 'Paladin', reqBase: { 'Water_2': 1, 'Fire_2': 1, 'Earth_2': 1 }, reqCombo: {}, effect: 'Aura: Anti-CC for Allies', color: '#DAA520', type: 'SUPPORT', auraTarget: 'ANTI_CC', auraValue: 1 },
-    { id: 'timebender', name: 'Timebender', reqBase: { 'Wind_4': 1, 'Ice_4': 1 }, reqCombo: {}, effect: 'Fast Stun + Slow Enemy Aura', color: '#D8BFD8', type: 'ATTACK', stunChc: 0.4, stunDur: 180, auraTarget: 'SLOW_ENEMY', auraValue: 0.5, spdMult: 0.2 }
+    { id: 'timebender', name: 'Timebender', reqBase: { 'Wind_4': 1, 'Ice_4': 1 }, reqCombo: {}, effect: 'Fast Stun + Slow Enemy Aura', color: '#D8BFD8', type: 'ATTACK', stunChc: 0.4, stunDur: 180, auraTarget: 'SLOW_ENEMY', auraValue: 0.5, spdMult: 0.2 },
+    
+    // Light Towers (Any 5 of the same element, T1-T5)
+    { id: 'light_earth', name: 'Light Tower', reqBase: { 'Earth_1': 1, 'Earth_2': 1, 'Earth_3': 1, 'Earth_4': 1, 'Earth_5': 1 }, reqCombo: {}, effect: 'Global RNG + High DMG + Stun', color: '#FFFFCC', type: 'ATTACK', rngMult: 15.0, dmgMult: 12.0, stunChc: 0.5, stunDur: 150, unique: true },
+    { id: 'light_water', name: 'Light Tower', reqBase: { 'Water_1': 1, 'Water_2': 1, 'Water_3': 1, 'Water_4': 1, 'Water_5': 1 }, reqCombo: {}, effect: 'Global RNG + High DMG + Stun', color: '#FFFFCC', type: 'ATTACK', rngMult: 15.0, dmgMult: 12.0, stunChc: 0.5, stunDur: 150, unique: true },
+    { id: 'light_fire', name: 'Light Tower', reqBase: { 'Fire_1': 1, 'Fire_2': 1, 'Fire_3': 1, 'Fire_4': 1, 'Fire_5': 1 }, reqCombo: {}, effect: 'Global RNG + High DMG + Stun', color: '#FFFFCC', type: 'ATTACK', rngMult: 15.0, dmgMult: 12.0, stunChc: 0.5, stunDur: 150, unique: true },
+    { id: 'light_wind', name: 'Light Tower', reqBase: { 'Wind_1': 1, 'Wind_2': 1, 'Wind_3': 1, 'Wind_4': 1, 'Wind_5': 1 }, reqCombo: {}, effect: 'Global RNG + High DMG + Stun', color: '#FFFFCC', type: 'ATTACK', rngMult: 15.0, dmgMult: 12.0, stunChc: 0.5, stunDur: 150, unique: true },
+    { id: 'light_ice', name: 'Light Tower', reqBase: { 'Ice_1': 1, 'Ice_2': 1, 'Ice_3': 1, 'Ice_4': 1, 'Ice_5': 1 }, reqCombo: {}, effect: 'Global RNG + High DMG + Stun', color: '#FFFFCC', type: 'ATTACK', rngMult: 15.0, dmgMult: 12.0, stunChc: 0.5, stunDur: 150, unique: true },
+
+    // Dark Tower
+    { id: 'dark', name: 'Dark Tower', reqBase: { 'Earth_5': 1, 'Water_5': 1, 'Fire_5': 1, 'Wind_5': 1, 'Ice_5': 1 }, reqCombo: {}, effect: 'Global RNG + Multi 5 + Omni Aura', color: '#4B0082', type: 'ATTACK', rngMult: 15.0, dmgMult: 8.0, multiTarget: 5, auraTarget: 'DARK_OMNI', unique: true }
 ];
 
 const SHOP_POOL = [
@@ -400,12 +408,27 @@ function populateModals() {
     }
     elHtml += `</div>`;
     
-    elHtml += `<h3 style="border-bottom: 2px solid #555; padding-bottom: 5px; color: var(--gold);">Tower Combinations (${RECIPES.length} Total)</h3>`;
-    elHtml += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px;">`;
+    let uniqueRecipes = [];
+    let seenNames = new Set();
     for (let r of RECIPES) {
+        if (!seenNames.has(r.name)) {
+            seenNames.add(r.name);
+            uniqueRecipes.push(r);
+        }
+    }
+    
+    elHtml += `<h3 style="border-bottom: 2px solid #555; padding-bottom: 5px; color: var(--gold);">Tower Combinations (${uniqueRecipes.length} Unique)</h3>`;
+    elHtml += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px;">`;
+    for (let r of uniqueRecipes) {
         let reqs = [];
-        for (let req in r.reqBase) reqs.push(`${r.reqBase[req]}x T${req.split('_')[1]} ${req.split('_')[0]}`);
-        for (let req in r.reqCombo) reqs.push(`${r.reqCombo[req]}x ${RECIPES.find(x=>x.id===req).name}`);
+        if (r.name === 'Light Tower') {
+            reqs.push(`1x T1-T5 Any Same Element`);
+        } else if (r.name === 'Dark Tower') {
+            reqs.push(`1x T5 All 5 Elements`);
+        } else {
+            for (let req in r.reqBase) reqs.push(`${r.reqBase[req]}x T${req.split('_')[1]} ${req.split('_')[0]}`);
+            for (let req in r.reqCombo) reqs.push(`${r.reqCombo[req]}x ${RECIPES.find(x=>x.id===req).name}`);
+        }
         
         elHtml += `<div style="background: #222; padding: 10px; border-radius: 6px; border-left: 4px solid ${r.color};">
             <strong style="color:${r.color}; font-size: 1.1em;">${r.name}</strong>
@@ -415,8 +438,71 @@ function populateModals() {
     }
     elHtml += `</div>`;
     document.getElementById('elements-modal-content').innerHTML = elHtml;
+    
+    let waveHtml = `
+        <h3>Wave Scaling</h3>
+        <p>Every wave starts with 10 base enemies. Flawless wave increases count by 1. Leak reduces by 1.</p>
+        <p>Enemies gain Base Armor equal to <strong>Wave Number * 2</strong>.</p>
+        <h3>Enemy Types & Buffs</h3>
+        <ul style="padding-left: 20px;">
+            <li><strong style="color:#00ffff">SHIELD:</strong> Starts with 50% extra HP as a shield.</li>
+            <li><strong style="color:#00ff00">REGEN:</strong> Passively heals 5% max HP per second.</li>
+            <li><strong style="color:#ffffff">DASH:</strong> Gains massive speed boost for 1 second when hit.</li>
+            <li><strong style="color:#ff00ff">IMMUNE:</strong> Immune to Slow/Freeze. Has 50% less Base Armor.</li>
+            <li><strong style="color:#ff8c00">DISARM AURA:</strong> Disables towers within 3 squares range.</li>
+            <li><strong style="color:#1e90ff">SLOW AURA:</strong> Reduces ASPD of towers within 3 squares.</li>
+            <li><strong style="color:#aaaaaa">PHASING:</strong> Temporarily invincible for 2s every 5s, moves 50% slower while active.</li>
+            <li><strong style="color:#2196F3">JUMPER:</strong> Jumps 2-4 squares ahead when HP drops by 20%.</li>
+            <li><strong style="color:#87CEFA">FLYING:</strong> Spawns only after wave 5. Targeted by Air/Hybrid only.</li>
+            <li><strong style="color:#aaa">INVISIBLE:</strong> Appears on Wave 7, 14. Requires True Sight.</li>
+            <li><strong style="color:#ff00ff">BOSS:</strong> Appears every 10 waves. Huge HP, slow speed.</li>
+        </ul>
+    `;
+    document.getElementById('waves-modal-content').innerHTML = waveHtml;
 }
 populateModals();
+
+// --- MENU CONTROLS ---
+const btnMenu = document.getElementById('btn-menu');
+const menuDropdown = document.getElementById('menu-dropdown');
+
+btnMenu.addEventListener('click', (e) => {
+    e.stopPropagation();
+    menuDropdown.style.display = menuDropdown.style.display === 'block' ? 'none' : 'block';
+});
+
+document.addEventListener('click', (e) => {
+    if (!btnMenu.contains(e.target) && !menuDropdown.contains(e.target)) {
+        menuDropdown.style.display = 'none';
+    }
+});
+
+document.getElementById('btn-restart').addEventListener('click', () => { 
+    menuDropdown.style.display = 'none'; 
+    document.getElementById('restart-modal').style.display = 'flex'; 
+});
+document.getElementById('btn-elements').addEventListener('click', () => { 
+    menuDropdown.style.display = 'none'; 
+    document.getElementById('elements-modal').style.display = 'flex'; 
+});
+document.getElementById('btn-waves').addEventListener('click', () => { 
+    menuDropdown.style.display = 'none'; 
+    document.getElementById('waves-modal').style.display = 'flex'; 
+});
+document.getElementById('btn-restart-no').addEventListener('click', () => { 
+    document.getElementById('restart-modal').style.display = 'none'; 
+});
+
+document.getElementById('btn-restart-yes').addEventListener('click', () => {
+    document.getElementById('restart-modal').style.display = 'none';
+    state = STATES.BUILD_PLACE; builderLevel = 1; exp = 0; gold = 40; lives = 50; waveNumber = 1;
+    currentMaxSpawns = 5; zaWarudoUnlocked = false; swapSource = null; midasActive = false; expActive = false;
+    grid = Array(ROWS).fill().map(() => Array(COLS).fill(null)); towers = []; stones = []; unrevealedSpawns = [];
+    enemies = []; projectiles = []; particles = []; floatingTexts = []; arrowTrail = []; waveClearTimer = 0;
+    selectedSpawnIndex = -1; selectedTower = null; selectedStone = null;
+    frames = 0; waveEnemiesToSpawn = 0; bonusEnemies = 0;
+    precalculateWave(); refreshShop(); cachedPath = calculateFullPath(); updateUI();
+});
 
 function isExclusionZone(x, y) { return false; } 
 function getNeighbors(x, y) {
@@ -615,6 +701,7 @@ function updateUI() {
     // TEMP GLOW LOGIC FOR BUILD PHASE
     if (state === STATES.BUILD_PLACE || state === STATES.BUILD_SELECT) {
         for (let r of RECIPES) {
+            if (r.unique && towers.some(t => t.comboName === r.name)) continue;
             if (Object.keys(r.reqCombo || {}).length > 0) continue;
             let isStrictlyTemp = true, strictCheck = { ...tBase };
             for (let req in r.reqBase) { if ((strictCheck[req] || 0) < r.reqBase[req]) { isStrictlyTemp = false; break; } }
@@ -626,6 +713,7 @@ function updateUI() {
     }
 
     for (let r of RECIPES) {
+        if (r.unique && towers.some(t => t.comboName === r.name)) continue;
         let valid = true;
         for (let req in r.reqBase) { if ((globalInv.base[req] ? globalInv.base[req].length : 0) < r.reqBase[req]) valid = false; }
         for (let req in r.reqCombo) { if ((globalInv.combo[req] ? globalInv.combo[req].length : 0) < r.reqCombo[req]) valid = false; }
@@ -689,6 +777,7 @@ function updateUI() {
         let recipeNodes = [];
 
         for (let r of RECIPES) {
+            if (r.unique && towers.some(t => t.comboName === r.name)) continue;
             let isPart = false;
             let requiredTargetKey = targetTower && !targetTower.isCombo ? `${targetTower.element.name}_${targetTower.tier}` : null;
 
@@ -766,7 +855,15 @@ function updateUI() {
         }
 
         recipeNodes.sort((a, b) => b.score - a.score);
-        recipeNodes.forEach(item => { rHints.appendChild(item.dom); });
+        let uniqueNodes = [];
+        let seenNodes = new Set();
+        recipeNodes.forEach(item => {
+            if (!seenNodes.has(item.r.name)) {
+                seenNodes.add(item.r.name);
+                rHints.appendChild(item.dom);
+                uniqueNodes.push(item);
+            }
+        });
     }
 
     const sItems = document.getElementById('shop-items'); sItems.innerHTML = '';
@@ -878,7 +975,7 @@ function processTempCombine(selectedIndex, recipe) {
     calcTowerStats(newTower); towers.push(newTower); grid[baseSpawn.y][baseSpawn.x] = 'TOWER';
 
     for (let i = 0; i < unrevealedSpawns.length; i++) {
-        if (i !== selectedIndex) { let s = unrevealedSpawns[i]; stones.push({x: s.x, y: s.y}); grid[s.y][s.x] = 'STONE'; }
+        if (!consumed.includes(i)) { let s = unrevealedSpawns[i]; stones.push({x: s.x, y: s.y}); grid[s.y][s.x] = 'STONE'; }
     }
     unrevealedSpawns = []; selectedSpawnIndex = -1; selectedTower = newTower; cachedPath = calculateFullPath(); state = STATES.BUILD_COMBINE;
     if (waveNumber % 3 === 1) refreshShop(); updateUI();
@@ -1026,8 +1123,8 @@ function gameLoop() {
             if (t.isCombo && t.recipe) {
                 let rPx = (t.range + (t.buffs.permRng||0)) * CELL_SIZE;
                 let rt = t.recipe.auraTarget;
-                if (rt === 'PIERCE_ENEMY') for (let e of enemies) if (Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) e.armorDebuff += t.recipe.auraValue;
-                if (rt === 'SLOW_ENEMY') for (let e of enemies) if (Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) e.slowAuraDebuff += t.recipe.auraValue;
+                if (rt === 'PIERCE_ENEMY' || rt === 'DARK_OMNI') for (let e of enemies) if (Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) e.armorDebuff += (rt === 'DARK_OMNI' ? 30 : t.recipe.auraValue);
+                if (rt === 'SLOW_ENEMY' || rt === 'DARK_OMNI') for (let e of enemies) if (Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) e.slowAuraDebuff += (rt === 'DARK_OMNI' ? 0.4 : t.recipe.auraValue);
             }
         }
 
@@ -1083,7 +1180,7 @@ function gameLoop() {
                         if (rt === 'SPEED') other.buffs.speed += rv; if (rt === 'DAMAGE') other.buffs.damage += rv;
                         if (rt === 'CRIT') other.buffs.crit += rv; if (rt === 'RANGE') other.buffs.range += rv;
                         if (rt === 'PIERCE') other.buffs.pierce += rv; if (rt === 'TRUE_SIGHT') other.buffs.trueSight = true;
-                        if (rt === 'ANTI_CC') other.buffs.antiCC = true;
+                        if (rt === 'ANTI_CC' || rt === 'DARK_OMNI') other.buffs.antiCC = true;
                         if (rt === 'OMNI') { other.buffs.antiCC = true; other.buffs.trueSight = true; other.buffs.speed += 0.8; other.buffs.damage += 0.8; other.buffs.crit += 0.3;  other.buffs.pierce += 0.3; }
                         if (rt === 'BURN' && frames % 30 === 0) for (let e of enemies) if (Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) damageEnemy(e, rv, t);
                     }
@@ -1097,7 +1194,7 @@ function gameLoop() {
         }
 
         for (let t of towers) {
-            if (t.recipe && (t.recipe.auraTarget === 'BURN' || t.recipe.auraTarget === 'PIERCE_ENEMY' || t.recipe.auraTarget === 'SLOW_ENEMY')) continue; 
+            if (t.recipe && (t.recipe.auraTarget === 'BURN' || t.recipe.auraTarget === 'PIERCE_ENEMY' || t.recipe.auraTarget === 'SLOW_ENEMY' || t.recipe.auraTarget === 'DARK_OMNI')) continue; 
             if (t.enemyDebuffs.disarmed) continue;
             
             if (t.cooldown > 0) t.cooldown--;
@@ -1177,7 +1274,7 @@ function gameLoop() {
     }
 
     for(let t of towers) {
-        if (t.isCombo && (t.comboColor === '#C0C0C0' || t.comboColor === '#000000')) {
+        if (t.isCombo && (t.comboColor === '#FFFFCC' || t.comboColor === '#4B0082')) {
             if (Math.random() < 0.1) { particles.push({ x: t.x * CELL_SIZE + CELL_SIZE/2 + (Math.random()-0.5)*20, y: t.y * CELL_SIZE + CELL_SIZE/2 + (Math.random()-0.5)*20, vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2 - 1, life: 15, color: '#FFD700' }); }
         }
     }
@@ -1196,7 +1293,6 @@ function gameLoop() {
     if (state === STATES.BUILD_PLACE) ctx.fillStyle = 'rgba(255,0,0,0.1)'; WAYPOINTS.forEach(wp => { ctx.fillRect(wp.x*CELL_SIZE, wp.y*CELL_SIZE, CELL_SIZE, CELL_SIZE); });
 
     if (cachedPath.length > 0) {
-        // Faint full-square path guideline restored (very low visibility)
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)'; 
         ctx.lineWidth = CELL_SIZE; 
         ctx.lineCap = 'square'; 
@@ -1400,15 +1496,15 @@ function gameLoop() {
         
         ctx.save();
         ctx.translate(CANVAS_SIZE/2, CANVAS_SIZE/2);
-        let scale = 1 + (120 - waveClearTimer) * 0.005;
+        let scale = 0.5 + (120 - waveClearTimer) * 0.0025; // 50% scale
         ctx.scale(scale, scale);
         ctx.globalAlpha = Math.min(1, waveClearTimer / 30);
-        ctx.font = 'bold 30px Arial';
+        ctx.font = 'bold 60px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
         ctx.fillStyle = '#000';
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 6;
         ctx.strokeText(waveClearText, 0, 0);
         
         ctx.fillStyle = '#FFD700';
