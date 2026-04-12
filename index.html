@@ -98,6 +98,7 @@
             margin-bottom: 10px;
         }
         .recipe-hint {
+            position: relative;
             font-size: 0.85em;
             background: #222;
             padding: 8px;
@@ -110,6 +111,31 @@
             background-color: #333 !important;
             transform: scale(1.02);
         }
+        
+        /* Recipe Hover Tooltip */
+        .recipe-tooltip {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #111;
+            border: 1px solid var(--gold);
+            padding: 10px;
+            border-radius: 6px;
+            z-index: 50;
+            width: max-content;
+            color: #fff;
+            font-family: monospace;
+            font-size: 0.95em;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.8);
+            pointer-events: none;
+            text-align: center;
+            margin-bottom: 5px;
+            line-height: 1.4;
+        }
+        .recipe-hint:hover .recipe-tooltip { display: block; }
+
         .menu-item:hover { background-color: #444 !important; }
         
         .modal-bg {
@@ -228,7 +254,7 @@
     </div>
 
 <script>
-/** * TOWER DEFENSE PROTOTYPE ENGINE - v7.0 */
+/** * TOWER DEFENSE PROTOTYPE ENGINE - v8.0 */
 
 // --- CONFIGURATION ---
 const COLS = 24;
@@ -652,11 +678,16 @@ function updateUI() {
 
     // Dynamic Recipe UI Builder
     if (targetTower) {
-        let inv = getTowerInventory();
-        if (!towers.includes(targetTower) && !targetTower.isCombo && targetTower.element) {
-            let key = `${targetTower.element.name}_${targetTower.tier}`;
-            if (!inv.base[key]) inv.base[key] = [];
-            inv.base[key].push(targetTower);
+        let pBase = {}, pCombo = {};
+        for (let t of towers) {
+            if (t.isCombo) { pCombo[t.recipe.id] = (pCombo[t.recipe.id] || 0) + 1; }
+            else { let k = `${t.element.name}_${t.tier}`; pBase[k] = (pBase[k] || 0) + 1; }
+        }
+        
+        let tBase = {};
+        for (let s of unrevealedSpawns) {
+            let k = `${s.element.name}_${s.tier}`;
+            tBase[k] = (tBase[k] || 0) + 1;
         }
 
         for (let r of RECIPES) {
@@ -666,52 +697,69 @@ function updateUI() {
             
             if (isPart) {
                 let reqList = [];
-                let tempBase = {}, tempCombo = {};
-                for (let k in inv.base) tempBase[k] = inv.base[k].length;
-                for (let k in inv.combo) tempCombo[k] = inv.combo[k].length;
-                
-                let valid = true;
+                let tempPBase = { ...pBase }, tempPCombo = { ...pCombo }, tempTBase = { ...tBase };
+                let canCraft = true;
+                let isFulfilledWithTemp = true;
 
                 for (let req in r.reqBase) {
                     let p = req.split('_'), name = `${TIERS[p[1]-1]} ${p[0]}`;
                     let needed = r.reqBase[req];
-                    if ((tempBase[req] || 0) < needed) valid = false;
-                    
                     for(let i=0; i<needed; i++) {
-                        if (tempBase[req] > 0) {
+                        if (tempPBase[req] > 0) {
                             reqList.push(`<span style="color:var(--accent); font-weight:bold">${name}</span>`);
-                            tempBase[req]--;
+                            tempPBase[req]--;
+                        } else if (tempTBase[req] > 0) {
+                            reqList.push(`<span style="color:#2196F3; font-weight:bold">${name}</span>`);
+                            tempTBase[req]--;
+                            canCraft = false;
                         } else {
-                            reqList.push(`<span style="color:#aaa">${name}</span>`);
+                            reqList.push(`<span style="color:#777">${name}</span>`);
+                            canCraft = false;
+                            isFulfilledWithTemp = false;
                         }
                     }
                 }
                 for (let req in r.reqCombo) {
                     let cr = RECIPES.find(x => x.id === req), name = cr ? cr.name : req;
                     let needed = r.reqCombo[req];
-                    if ((tempCombo[req] || 0) < needed) valid = false;
-
                     for(let i=0; i<needed; i++) {
-                        if (tempCombo[req] > 0) {
+                        if (tempPCombo[req] > 0) {
                             reqList.push(`<span style="color:var(--accent); font-weight:bold">${name}</span>`);
-                            tempCombo[req]--;
+                            tempPCombo[req]--;
                         } else {
-                            reqList.push(`<span style="color:#aaa">${name}</span>`);
+                            reqList.push(`<span style="color:#777">${name}</span>`);
+                            canCraft = false;
+                            isFulfilledWithTemp = false;
                         }
                     }
                 }
                 
                 let div = document.createElement('div');
                 div.className = 'recipe-hint';
-                div.style.borderLeft = `4px solid ${r.color}`;
-                div.innerHTML = `<strong>${r.name}</strong><br>${reqList.join(' + ')}`;
+                div.style.borderColor = canCraft ? 'var(--gold)' : (isFulfilledWithTemp ? '#2196F3' : 'var(--accent)');
                 
-                if (valid && state === STATES.BUILD_COMBINE && selectedTower) {
+                let sim = { element: targetTower.element, tier: targetTower.tier + 2, isCombo: true, recipe: r, buffs: { damage: 0, speed: 0, crit: 0, range: 0, pierce: 0, trueSight: false, antiCC: false } };
+                calcTowerStats(sim);
+                let tooltipHtml = `
+                    <div class="recipe-tooltip">
+                        <strong style="color:${r.color}">${r.name} Stats</strong><br>
+                        DMG: ${sim.baseDamage.toFixed(1)} | SPD: ${sim.baseSpeed.toFixed(1)} | RNG: ${sim.range.toFixed(1)}<br>
+                        CRT: ${Math.floor(sim.baseCrit*100)}% | SPL: ${sim.splash} | A/G: ${sim.element.type}<br>
+                        <span style="color:var(--gold)">Effect: ${r.effect}</span>
+                    </div>
+                `;
+
+                let htmlStr = `<strong style="color:${canCraft ? 'var(--gold)' : (isFulfilledWithTemp ? '#2196F3' : '#fff')}; font-size:1.1em;">${r.name}</strong><br><div style="margin-top:4px;">${reqList.join(' <span style="color:#555">+</span> ')}</div>`;
+                
+                if (canCraft && state === STATES.BUILD_COMBINE && selectedTower && towers.includes(selectedTower)) {
                     div.classList.add('clickable-recipe');
-                    div.style.cursor = 'pointer';
-                    div.innerHTML += `<br><span style="color:var(--accent); font-weight:bold; font-size:0.9em; display:block; margin-top:4px;">▶ Click to Craft</span>`;
+                    htmlStr += `<div style="color:var(--gold); font-weight:bold; font-size:0.95em; display:block; margin-top:8px; text-align:center; background: rgba(255,215,0,0.1); padding:4px; border-radius:4px;">✦ CLICK TO CRAFT ✦</div>`;
                     div.onclick = () => processCombine(selectedTower, r);
+                } else if (isFulfilledWithTemp) {
+                    htmlStr += `<div style="color:#2196F3; font-weight:bold; font-size:0.85em; display:block; margin-top:8px; text-align:center;">Keep elements to craft!</div>`;
                 }
+                
+                div.innerHTML = tooltipHtml + htmlStr;
                 rHints.appendChild(div);
             }
         }
@@ -760,11 +808,7 @@ btnUplevel.addEventListener('click', () => {
         let t = unrevealedSpawns[selectedSpawnIndex];
         let identicalCount = 0;
         for (let s of unrevealedSpawns) if (s.element.name === t.element.name && s.tier === t.tier) identicalCount++;
-        
-        if (identicalCount >= 3 && t.tier < 5) {
-            t.tier++;
-            keepTowerIndex(selectedSpawnIndex);
-        }
+        if (identicalCount >= 3 && t.tier < 5) { t.tier++; keepTowerIndex(selectedSpawnIndex); }
     }
 });
 
@@ -775,7 +819,6 @@ btnDelevel.addEventListener('click', () => {
     }
 });
 btnLevelup.addEventListener('click', () => { let req = EXP_REQ[builderLevel]; if (exp >= req && builderLevel < 10) { exp -= req; builderLevel++; updateUI(); } });
-
 
 function processCombine(baseTower, recipe) {
     let inv = getTowerInventory(), consumed = [];
@@ -870,6 +913,7 @@ canvas.addEventListener('click', (e) => {
 function drawRect(x, y, color, sizeRatio = 1.0) {
     let offset = (CELL_SIZE - (CELL_SIZE * sizeRatio)) / 2; ctx.fillStyle = color; ctx.fillRect(x * CELL_SIZE + offset, y * CELL_SIZE + offset, CELL_SIZE * sizeRatio, CELL_SIZE * sizeRatio);
 }
+
 function createParticles(x, y, color) { for (let i=0; i<10; i++) particles.push({ x: x, y: y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, life: 20+Math.random()*10, color: color }); }
 
 function gameLoop() {
@@ -901,7 +945,6 @@ function gameLoop() {
         for (let t of towers) {
             let rPx = ((t.range + (t.buffs.permRng||0)) * CELL_SIZE);
             
-            // Base Wind True Sight Aura
             if (!t.isCombo && t.element && t.element.name === 'Wind') {
                 for (let other of towers) if (Math.hypot((other.x - t.x)*CELL_SIZE, (other.y - t.y)*CELL_SIZE) <= rPx) other.buffs.trueSight = true;
                 t.buffs.trueSight = true;
@@ -911,25 +954,15 @@ function gameLoop() {
                 for (let other of towers) {
                     if (t === other) continue;
                     if (Math.hypot((other.x - t.x)*CELL_SIZE, (other.y - t.y)*CELL_SIZE) <= rPx) {
-                        let rt = t.recipe.auraTarget;
-                        let rv = t.recipe.auraValue;
-                        if (rt === 'SPEED') other.buffs.speed += rv;
-                        if (rt === 'DAMAGE') other.buffs.damage += rv;
-                        if (rt === 'CRIT') other.buffs.crit += rv;
-                        if (rt === 'RANGE') other.buffs.range += rv;
-                        if (rt === 'PIERCE') other.buffs.pierce += rv;
-                        if (rt === 'TRUE_SIGHT') other.buffs.trueSight = true;
+                        let rt = t.recipe.auraTarget; let rv = t.recipe.auraValue;
+                        if (rt === 'SPEED') other.buffs.speed += rv; if (rt === 'DAMAGE') other.buffs.damage += rv;
+                        if (rt === 'CRIT') other.buffs.crit += rv; if (rt === 'RANGE') other.buffs.range += rv;
+                        if (rt === 'PIERCE') other.buffs.pierce += rv; if (rt === 'TRUE_SIGHT') other.buffs.trueSight = true;
                         if (rt === 'ANTI_CC') other.buffs.antiCC = true;
-                        if (rt === 'OMNI') {
-                            other.buffs.antiCC = true; other.buffs.trueSight = true; 
-                            other.buffs.speed += 0.8; other.buffs.damage += 0.8; 
-                            other.buffs.crit += 0.3;  other.buffs.pierce += 0.3;
-                        }
+                        if (rt === 'OMNI') { other.buffs.antiCC = true; other.buffs.trueSight = true; other.buffs.speed += 0.8; other.buffs.damage += 0.8; other.buffs.crit += 0.3;  other.buffs.pierce += 0.3; }
                         
                         if (rt === 'BURN' && frames % 30 === 0) {
-                            for (let e of enemies) {
-                                if (Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) damageEnemy(e, rv, t);
-                            }
+                            for (let e of enemies) if (Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) damageEnemy(e, rv, t);
                         }
                     }
                 }
@@ -938,14 +971,8 @@ function gameLoop() {
 
         // Pass 2: Enemy Auras
         for (let e of enemies) {
-            if (e.buffs.includes('DISARM_AURA')) {
-                let rPx = 3 * CELL_SIZE;
-                for (let t of towers) if (!t.buffs.antiCC && Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) t.enemyDebuffs.disarmed = true;
-            }
-            if (e.buffs.includes('SLOW_AURA')) {
-                let rPx = 3 * CELL_SIZE;
-                for (let t of towers) if (!t.buffs.antiCC && Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) t.enemyDebuffs.spdReduction = Math.min(0.8, waveNumber * 0.02);
-            }
+            if (e.buffs.includes('DISARM_AURA')) { let rPx = 3 * CELL_SIZE; for (let t of towers) if (!t.buffs.antiCC && Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) t.enemyDebuffs.disarmed = true; }
+            if (e.buffs.includes('SLOW_AURA')) { let rPx = 3 * CELL_SIZE; for (let t of towers) if (!t.buffs.antiCC && Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) t.enemyDebuffs.spdReduction = Math.min(0.8, waveNumber * 0.02); }
         }
 
         // Shooting
@@ -1035,36 +1062,30 @@ function gameLoop() {
         for (let i=0; i<cachedPath.length; i++) { let px = cachedPath[i].x * CELL_SIZE + CELL_SIZE/2, py = cachedPath[i].y * CELL_SIZE + CELL_SIZE/2; if(i===0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
         ctx.stroke();
         
-        // Animated flowing arrows
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-        for (let i = 0; i < cachedPath.length - 1; i++) {
-            if ((i - Math.floor(frames / 10)) % 4 === 0) {
-                let p1 = cachedPath[i];
-                let p2 = cachedPath[i+1];
-                let cx = p1.x * CELL_SIZE + CELL_SIZE/2;
-                let cy = p1.y * CELL_SIZE + CELL_SIZE/2;
-                let angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-                ctx.save();
-                ctx.translate(cx, cy);
-                ctx.rotate(angle);
-                ctx.beginPath();
-                ctx.moveTo(-6, -6);
-                ctx.lineTo(6, 0);
-                ctx.lineTo(-6, 6);
-                ctx.fill();
-                ctx.restore();
-            }
+        // Single animated moving arrow
+        let pathLen = cachedPath.length - 1;
+        if (pathLen > 0) {
+            let framesPerCell = 15;
+            let totalFrames = pathLen * framesPerCell;
+            let currentFrame = frames % totalFrames;
+            let i = Math.floor(currentFrame / framesPerCell);
+            let progress = (currentFrame % framesPerCell) / framesPerCell;
+            
+            let p1 = cachedPath[i], p2 = cachedPath[i+1];
+            let cx = (p1.x + (p2.x - p1.x) * progress) * CELL_SIZE + CELL_SIZE/2;
+            let cy = (p1.y + (p2.y - p1.y) * progress) * CELL_SIZE + CELL_SIZE/2;
+            let angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.save(); ctx.translate(cx, cy); ctx.rotate(angle);
+            ctx.beginPath(); ctx.moveTo(-8, -8); ctx.lineTo(10, 0); ctx.lineTo(-8, 8); ctx.fill();
+            ctx.restore();
         }
     }
 
     WAYPOINTS.forEach((wp, idx) => { 
-        ctx.fillStyle = 'rgba(255,255,0,0.15)';
-        ctx.fillRect(wp.x*CELL_SIZE, wp.y*CELL_SIZE, CELL_SIZE, CELL_SIZE);
-        
-        // Draw Checkpoint Numbers
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.font = 'bold 16px Arial';
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(255,255,0,0.15)'; ctx.fillRect(wp.x*CELL_SIZE, wp.y*CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(idx + 1, wp.x*CELL_SIZE + CELL_SIZE/2, wp.y*CELL_SIZE + CELL_SIZE/2);
     });
 
