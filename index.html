@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elemental Maze - Homepage</title>
+    <style>
+        :root {
+            --bg: #000000; 
+            --panel: #1a1a1a;
+            --text: #eee;
+            --accent: #4caf50;
+            --danger: #f44336;
+            --gold: #ffd700;
+        }
+        body {
+            margin: 0;
+            padding: 40px 20px;
+            background-color: var(--bg); 
+            color: var(--text);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .header h1 {
+            color: var(--accent);
+            font-size: 3.5em;
+            margin: 0;
+            letter-spacing: 2px;
+            text-shadow: 0 0 20px rgba(76, 175, 80, 0.4);
+            text-transform: uppercase;
+        }
+        .header p {
+            color: #aaa;
+            font-size: 1.2em;
+            margin-top: 10px;
+        }
+
+        .cards-container {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            margin-bottom: 50px;
+            flex-wrap: wrap;
+        }
+
+        .mode-card {
+            background: linear-gradient(145deg, #222, #111);
+            border: 2px solid #333;
+            border-radius: 12px;
+            width: 280px;
+            padding: 30px 20px;
+            text-align: center;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            position: relative;
+            overflow: hidden;
+        }
+        .mode-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 4px;
+            background: #555;
+            transition: background 0.3s ease;
+        }
+
+        .mode-card:hover {
+            transform: translateY(-10px);
+            border-color: #555;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.9), 0 0 20px rgba(255,255,255,0.05);
+        }
+        .mode-card.classic:hover::before { background: var(--accent); }
+        .mode-card.massive:hover::before { background: var(--danger); }
+
+        .mode-card h2 {
+            margin-top: 0;
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        .mode-card.classic h2 { color: var(--accent); }
+        .mode-card.massive h2 { color: var(--danger); }
+
+        .mode-card p {
+            color: #bbb;
+            font-size: 0.95em;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+        .play-btn {
+            display: inline-block;
+            padding: 10px 25px;
+            background: #333;
+            color: #fff;
+            border-radius: 6px;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+        .mode-card:hover .play-btn {
+            background: #444;
+        }
+
+        .tutorial-container {
+            background-color: var(--panel);
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 30px 40px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .tutorial-container h2 {
+            color: var(--gold);
+            text-align: center;
+            margin-top: 0;
+            border-bottom: 2px solid #333;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+        }
+
+        .step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 25px;
+            background: #111;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #222;
+        }
+
+        .step-number {
+            background: var(--accent);
+            color: #000;
+            font-weight: 900;
+            font-size: 1.5em;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            flex-shrink: 0;
+            margin-right: 20px;
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.4);
+        }
+
+        .step-content h3 {
+            margin-top: 0;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+
+        .step-content p {
+            margin: 0;
+            color: #bbb;
+            line-height: 1.6;
+        }
+
+        .highlight { color: var(--gold); font-weight: bold; }
+        .highlight-blue { color: #2196F3; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Elemental Maze</h1>
+        <p>A strategic tower defense and maze building game</p>
+    </div>
+
+    <!-- Game Mode Selection Cards -->
+    <div class="cards-container">
+        <a href="elemental1.html" class="mode-card classic">
+            <h2>12x12 Grid</h2>
+            <p><strong>Quick & Tactical</strong><br>A tighter map demanding careful maze planning. Enemies scale at 70% strength to balance the shorter path length.</p>
+            <div class="play-btn">Play 12x12</div>
+        </a>
+
+        <a href="elemental2.html" class="mode-card massive">
+            <h2>32x32 Grid</h2>
+            <p><strong>Massive & Epic</strong><br>A gigantic canvas to build the ultimate labyrinth. Enemies are at 100% full strength. Prepare for long, chaotic battles.</p>
+            <div class="play-btn">Play 32x32</div>
+        </a>
+    </div>
+
+    <!-- Step-by-Step Tutorial -->
+    <div class="tutorial-container">
+        <h2>How to Play</h2>
+
+        <div class="step">
+            <div class="step-number">1</div>
+            <div class="step-content">
+                <h3>The Build Phase</h3>
+                <p>Every round, you are given <span class="highlight">5 element markers</span> to place on the grid. Enemies must travel from waypoint 1 to the final waypoint. Use your markers to block their path and force them into a long, winding maze.</p>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">2</div>
+            <div class="step-content">
+                <h3>Merging Elements</h3>
+                <p>If you place or keep <span class="highlight">three of the exact same element and tier</span>, you can select one and click "Up-Level" to merge them into a single element of the next tier. Higher tiers are much stronger!</p>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">3</div>
+            <div class="step-content">
+                <h3>Crafting Combo Towers</h3>
+                <p>The true power lies in combinations. Check the recipe list on the right side of the screen. If your temporary (unkept) elements fulfill a recipe, the recipe will glow <span class="highlight-blue">blue</span>. Tap it to immediately "Insta-Craft" a powerful combined tower! Unused materials will turn into stone obstacles.</p>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">4</div>
+            <div class="step-content">
+                <h3>Defend the Maze</h3>
+                <p>Once you've managed your elements, click "START WAVE". Enemies will spawn and attempt to run your maze. As waves progress, enemies will gain nasty buffs like <span class="highlight">Shields, Dash, Phasing</span>, and disabling Auras. Bosses spawn every 10 waves!</p>
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">5</div>
+            <div class="step-content">
+                <h3>The Mystery Shop</h3>
+                <p>Every 5 waves, the Mystery Shop refreshes. Spend the gold you earn from killing enemies to buy global buffs like <span class="highlight">Za Warudo (slows all enemies)</span>, extra building markers, or permanent stat boosts for your favorite towers.</p>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
