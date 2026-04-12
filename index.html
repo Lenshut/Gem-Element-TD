@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze TD Prototype</title>
+    <style>
+        :root {
+            --bg: #1a1a1a;
+            --panel: #2a2a2a;
+            --text: #eee;
+            --accent: #4caf50;
+            --danger: #f44336;
+            --gold: #ffd700;
+        }
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #0f0f0f;
+            color: var(--text);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            user-select: none;
+        }
+        #game-container {
+            position: relative;
+            background-color: var(--bg);
+            border: 2px solid #444;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        canvas {
+            display: block;
+            cursor: crosshair;
+        }
+        #ui-panel {
+            width: 340px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .card {
+            background-color: var(--panel);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .stat-box {
+            background: #222;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: var(--accent);
+        }
+        button {
+            width: 100%;
+            padding: 8px;
+            background-color: #333;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+            margin-top: 5px;
+        }
+        button:hover:not(:disabled) { background-color: #444; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-accent { background-color: var(--accent); color: #000; }
+        .btn-accent:hover:not(:disabled) { background-color: #45a049; }
+        .btn-danger { background-color: var(--danger); color: white; }
+        .btn-danger:hover:not(:disabled) { background-color: #d32f2f; }
+        .btn-shop { background-color: #4b0082; color: #fff; border-color: #6a0dad; }
+        .btn-shop:hover:not(:disabled) { background-color: #6a0dad; }
+        
+        .color-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+        
+        #detailed-stats {
+            display: grid; 
+            grid-template-columns: 1fr 1fr 1fr; 
+            gap: 5px; 
+            background: #111; 
+            padding: 8px; 
+            border-radius: 4px; 
+            font-family: monospace; 
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+        .recipe-hint {
+            font-size: 0.85em;
+            background: #222;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 6px;
+            border-left: 4px solid var(--accent);
+            transition: 0.2s;
+        }
+        .recipe-hint:hover.clickable-recipe {
+            background-color: #333 !important;
+            transform: scale(1.02);
+        }
+        .menu-item:hover { background-color: #444 !important; }
+        
+        .modal-bg {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.8); z-index: 200; justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: var(--panel); padding: 20px; border-radius: 8px; border: 1px solid #444; 
+            width: 80%; max-width: 800px; max-height: 80vh; overflow-y: auto; color: #ccc;
+        }
+        .modal-content h3 { color: white; margin-top: 0; }
+        .modal-close { margin-top: 20px; width: auto; padding: 10px 30px; display: block; margin-left: auto; margin-right: auto; }
+    </style>
+</head>
+<body>
+
+    <!-- Hamburger Menu -->
+    <div id="menu-container" style="position: absolute; top: 20px; right: 20px; z-index: 100;">
+        <button id="btn-menu" style="width: 40px; height: 40px; padding: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 5px; margin: 0;">
+            <div style="width: 20px; height: 2px; background: white;"></div>
+            <div style="width: 20px; height: 2px; background: white;"></div>
+            <div style="width: 20px; height: 2px; background: white;"></div>
+        </button>
+        <div id="menu-dropdown" style="display: none; position: absolute; top: 50px; right: 0; background: var(--panel); border: 1px solid #444; border-radius: 4px; width: 160px; box-shadow: 0 5px 15px rgba(0,0,0,0.5);">
+            <button id="btn-restart" class="menu-item" style="border:none; border-bottom: 1px solid #444; margin:0; border-radius: 4px 4px 0 0; background: transparent; text-align: left; padding: 12px; width: 100%;">Restart Game</button>
+            <button id="btn-elements" class="menu-item" style="border:none; border-bottom: 1px solid #444; margin:0; border-radius: 0; background: transparent; text-align: left; padding: 12px; width: 100%;">Elements Info</button>
+            <button id="btn-waves" class="menu-item" style="border:none; border-bottom: 1px solid #444; margin:0; border-radius: 0; background: transparent; text-align: left; padding: 12px; width: 100%;">Waves Info</button>
+            <button class="menu-item" style="border:none; margin:0; border-radius: 0 0 4px 4px; background: transparent; text-align: left; padding: 12px; width: 100%; color: #aaa;">Settings (WIP)</button>
+        </div>
+    </div>
+
+    <!-- Restart Modal -->
+    <div id="restart-modal" class="modal-bg">
+        <div style="background: var(--panel); padding: 20px; border-radius: 8px; border: 1px solid #444; text-align: center; width: 250px;">
+            <h3 style="margin-top: 0; color: white;">Are you sure?</h3>
+            <p style="font-size: 0.9em; color: #ccc;">This will restart the game from Wave 1.</p>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button id="btn-restart-yes" class="btn-danger">Yes</button>
+                <button id="btn-restart-no" class="btn-accent">No</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Elements Modal -->
+    <div id="elements-modal" class="modal-bg">
+        <div class="modal-content">
+            <div id="elements-modal-content"></div>
+            <button class="btn-accent modal-close" onclick="document.getElementById('elements-modal').style.display='none'">Close</button>
+        </div>
+    </div>
+
+    <!-- Waves Modal -->
+    <div id="waves-modal" class="modal-bg">
+        <div class="modal-content">
+            <div id="waves-modal-content"></div>
+            <button class="btn-accent modal-close" onclick="document.getElementById('waves-modal').style.display='none'">Close</button>
+        </div>
+    </div>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="768" height="768"></canvas>
+    </div>
+
+    <div id="ui-panel">
+        <div class="card">
+            <h2 style="margin-top:0">Status</h2>
+            <div class="stats-grid">
+                <div class="stat-box">Lives <div class="stat-value" style="color:var(--danger)" id="ui-lives">50</div></div>
+                <div class="stat-box">Gold <div class="stat-value" style="color:var(--gold)" id="ui-gold">30</div></div>
+                <div class="stat-box">Wave <div class="stat-value" id="ui-wave">1</div></div>
+                <div class="stat-box">Builder Lvl <div class="stat-value" id="ui-level">1</div></div>
+            </div>
+            <div style="margin-bottom:10px;">EXP: <span id="ui-exp">0</span> / <span id="ui-exp-req">10</span></div>
+            <button id="btn-levelup" class="btn-accent" disabled>Level Up</button>
+            
+            <div id="spawn-chances" style="margin-top:15px; font-size:0.8em; color:#aaa;">
+                <div style="margin-bottom: 5px; font-weight: bold;">Spawn Chances (Level <span id="chance-lvl">1</span>):</div>
+                <div style="display:flex; justify-content:space-between; text-align:center; background:#111; padding:8px 5px; border-radius:4px; border: 1px solid #333;">
+                    <div><div style="color:#fff; margin-bottom:2px;">T1</div><div id="chc-1">70%</div></div>
+                    <div><div style="color:#fff; margin-bottom:2px;">T2</div><div id="chc-2">20%</div></div>
+                    <div><div style="color:#fff; margin-bottom:2px;">T3</div><div id="chc-3">10%</div></div>
+                    <div><div style="color:#fff; margin-bottom:2px;">T4</div><div id="chc-4">0%</div></div>
+                    <div><div style="color:#fff; margin-bottom:2px;">T5</div><div id="chc-5">0%</div></div>
+                </div>
+            </div>
+
+            <!-- Moved & Enlarged Start Wave Button -->
+            <button id="btn-startwave" class="btn-accent" style="margin-top:15px; display:none; padding:15px; font-size:1.1em; font-weight:bold; border-radius: 8px;">START WAVE</button>
+        </div>
+
+        <div class="card" id="action-panel">
+            <h3 id="phase-title" style="margin-top:0">Phase: Building</h3>
+            <div id="next-wave-info" style="color:var(--gold); margin-bottom:5px; font-size:0.85em; background:#111; padding:5px; border-radius:4px;"></div>
+            <p id="phase-desc" style="font-size:0.9em; color:#ccc; margin-top:0;">Place 5 towers on the grid.</p>
+            
+            <div id="selection-actions" style="display:none; margin-top:10px;">
+                <div id="selected-info" style="margin-bottom:10px; font-weight:bold; font-size:1.1em;">None</div>
+                
+                <button id="btn-keep" class="btn-accent" style="display:none; margin-bottom:5px;">Keep Tower</button>
+                <button id="btn-uplevel" class="btn-accent" style="display:none; margin-bottom:10px; background-color:#2196F3; border-color:#0d47a1;">Up-Level (Merge 3x)</button>
+                <button id="btn-delevel" class="btn-danger" style="display:none; margin-bottom:10px;">De-Level (5 Gold)</button>
+                
+                <!-- Extra actions like remove stone -->
+                <div id="craft-actions"></div> 
+                
+                <div id="detailed-stats"></div>
+                <div id="recipe-hints" style="margin-bottom:10px;"></div>
+            </div>
+        </div>
+
+        <div class="card" id="shop-panel">
+            <h3 style="margin-top:0; color:var(--gold);">Mystery Shop</h3>
+            <div style="font-size:0.85em; color:#aaa; margin-bottom:10px;">Refreshes every 3 waves. Select a tower to apply buffs!</div>
+            <div id="shop-items"></div>
+        </div>
+    </div>
+
+<script>
+/** * TOWER DEFENSE PROTOTYPE ENGINE - v7.0 */
+
+// --- CONFIGURATION ---
+const COLS = 24;
+const ROWS = 24;
+const CELL_SIZE = 32;
+const CANVAS_SIZE = COLS * CELL_SIZE;
+
+const STATES = { BUILD_PLACE: 0, BUILD_SELECT: 1, BUILD_COMBINE: 2, WAVE: 3, GAME_OVER: 4 };
+
+const ELEMENTS = {
+    EARTH: { name: 'Earth', color: '#8B4513', type: 'GRND', range: 2.5, damage: 15, speed: 60, splash: 1.5 },
+    WATER: { name: 'Water', color: '#1E90FF', type: 'BOTH', range: 3.5, damage: 8, speed: 40, splash: 1.0 },
+    FIRE: { name: 'Fire', color: '#FF4500', type: 'BOTH', range: 3.5, damage: 12, speed: 45, burn: 3 },
+    WIND: { name: 'Wind', color: '#32CD32', type: 'AIR', range: 6.0, damage: 10, speed: 20 }, // True sight is now aura logic
+    ICE: { name: 'Ice', color: '#00FFFF', type: 'BOTH', range: 3.5, damage: 6, speed: 25, slow: 0.3 }
+};
+
+const TIERS = ["Tiny", "Little", "Normal", "Large", "Huge"];
+const SPAWN_CHANCES = [
+    [70, 20, 10, 0, 0], [50, 30, 20, 0, 0], [30, 40, 20, 10, 0], [20, 30, 30, 10, 10], [10, 20, 30, 30, 10],
+    [5, 15, 30, 30, 20], [0, 10, 20, 40, 30], [0, 5, 15, 40, 40], [0, 0, 10, 30, 60], [0, 0, 0, 20, 80]
+];
+const EXP_REQ = [0, 10, 16, 28, 42, 60, 85, 115, 150, 200]; 
+
+const WAYPOINTS = [
+    {x: 1, y: 1},     // Top Left Corner (Start)
+    {x: 1, y: 11},    // Left Mid
+    {x: 21, y: 11},   // Right Mid
+    {x: 21, y: 1},    // Top Right Corner
+    {x: 11, y: 1},    // Top Mid
+    {x: 11, y: 21},   // Bot Mid
+    {x: 21, y: 21}    // Right Bot Corner (Finish)
+];
+
+// --- RECIPES (32 Total) ---
+const RECIPES = [
+    { id: 'magma', name: 'Magma Tower', reqBase: { 'Earth_1': 1, 'Fire_1': 1, 'Earth_2': 1 }, reqCombo: {}, effect: 'Splash + DoT', color: '#B22222', type: 'ATTACK', applyBurn: 3 },
+    { id: 'avalanche', name: 'Avalanche Tower', reqBase: { 'Earth_1': 1, 'Water_2': 1, 'Ice_1': 1 }, reqCombo: {}, effect: 'Splash + Heavy Slow', color: '#4682B4', type: 'ATTACK', applySlow: 0.6 },
+    { id: 'acid', name: 'Acid Tower', reqBase: { 'Water_2': 1, 'Earth_1': 1, 'Fire_1': 1 }, reqCombo: {}, effect: 'Pierce 40% + Burn', color: '#32CD32', type: 'ATTACK', pierce: 0.4, applyBurn: 3 },
+    { id: 'sniper', name: 'Sniper Tower', reqBase: { 'Wind_3': 1, 'Earth_2': 1, 'Fire_2': 1 }, reqCombo: {}, effect: 'Insane Range + 50% Crit', color: '#556B2F', type: 'ATTACK', rngMult: 3.0, critBonus: 0.5, dmgMult: 3.0 },
+    { id: 'gatling', name: 'Gatling Gun', reqBase: { 'Fire_2': 1, 'Wind_2': 1, 'Earth_1': 1 }, reqCombo: {}, effect: 'Extreme ASPD, Low DMG', color: '#A0522D', type: 'ATTACK', spdMult: 0.2, dmgMult: 0.4 },
+    { id: 'meteor', name: 'Meteorite', reqBase: { 'Earth_4': 1, 'Fire_3': 1, 'Earth_3': 1 }, reqCombo: {}, effect: 'Huge Splash & DMG, Slow ASPD', color: '#DC143C', type: 'ATTACK', rngMult: 4.0, splashMult: 3.0, dmgMult: 4.0, spdMult: 4.0 },
+    { id: 'nova', name: 'Frost Nova', reqBase: { 'Ice_3': 1, 'Water_2': 1, 'Wind_2': 1 }, reqCombo: {}, effect: 'Huge Splash + 30% Freeze', color: '#ADD8E6', type: 'ATTACK', splashMult: 2.5, freezeChc: 0.3, freezeDur: 45 },
+    { id: 'quake', name: 'Earthquake', reqBase: { 'Earth_3': 1, 'Water_2': 1, 'Wind_1': 1 }, reqCombo: {}, effect: 'Massive Ground Splash', color: '#8B4513', type: 'ATTACK', splashMult: 2.0, dmgMult: 3.0 },
+    
+    { id: 'enchant', name: 'Enchant Tower', reqBase: { 'Wind_2': 1, 'Water_1': 1, 'Wind_1': 1 }, reqCombo: {}, effect: 'Aura: +30% ASPD', color: '#87CEEB', type: 'SUPPORT', auraTarget: 'SPEED', auraValue: 0.3 },
+    { id: 'forge', name: 'Forge Tower', reqBase: { 'Fire_2': 1, 'Earth_1': 1, 'Fire_1': 1 }, reqCombo: {}, effect: 'Aura: +30% DMG', color: '#FF8C00', type: 'SUPPORT', auraTarget: 'DAMAGE', auraValue: 0.3 },
+    { id: 'focus', name: 'Focus Stone', reqBase: { 'Ice_2': 1, 'Fire_2': 1, 'Ice_1': 1 }, reqCombo: {}, effect: 'Aura: +20% CRIT', color: '#DDA0DD', type: 'SUPPORT', auraTarget: 'CRIT', auraValue: 0.2 },
+    { id: 'scope', name: 'Spotter Tower', reqBase: { 'Wind_2': 1, 'Water_1': 1, 'Ice_1': 1 }, reqCombo: {}, effect: 'Aura: +1.5 Range', color: '#4682B4', type: 'SUPPORT', auraTarget: 'RANGE', auraValue: 1.5 },
+    { id: 'corrosion', name: 'Corrosion Stone', reqBase: { 'Water_3': 1, 'Earth_2': 1, 'Fire_2': 1 }, reqCombo: {}, effect: 'Aura: +30% Pierce', color: '#9ACD32', type: 'SUPPORT', auraTarget: 'PIERCE', auraValue: 0.3 },
+    { id: 'blessing', name: 'Blessing Tower', reqBase: { 'Water_2': 1, 'Wind_2': 1, 'Earth_1': 1 }, reqCombo: {}, effect: 'Aura: Anti-CC (Immune/Disarm/Slow)', color: '#FFD700', type: 'SUPPORT', auraTarget: 'ANTI_CC', auraValue: 1 },
+
+    { id: 'ballista', name: 'Ballista Tower', reqBase: { 'Wind_2': 1, 'Earth_2': 1, 'Wind_1': 1 }, reqCombo: {}, effect: 'Pierce 50% Enemy Armor', color: '#8B0000', type: 'ATTACK', pierce: 0.5 },
+    { id: 'sentry', name: 'Sentry Tower', reqBase: { 'Wind_1': 1, 'Fire_1': 1, 'Water_1': 1 }, reqCombo: {}, effect: 'True Sight (Low DMG)', color: '#D3D3D3', type: 'ATTACK', seeInvis: true, dmgMult: 0.6 },
+    { id: 'radar', name: 'Radar Tower', reqBase: { 'Wind_2': 1, 'Earth_2': 1 }, reqCombo: { 'sentry': 1 }, effect: 'True Sight (Med RNG)', color: '#A9A9A9', type: 'ATTACK', seeInvis: true, rngMult: 1.5 },
+    { id: 'oracle', name: 'Oracle Tower', reqBase: { 'Wind_3': 1 }, reqCombo: { 'radar': 1, 'focus': 1 }, effect: 'Aura: True Sight', color: '#F0E68C', type: 'SUPPORT', auraTarget: 'TRUE_SIGHT', seeInvis: true },
+    { id: 'eye', name: 'Eye of True Sight', reqBase: { 'Water_3': 1, 'Wind_4': 1 }, reqCombo: { 'oracle': 1, 'tsunami': 1 }, effect: 'Global True Sight (4-Elem)', color: '#FFD700', type: 'ATTACK', seeInvis: true, rngMult: 15.0, dmgMult: 5.0 },
+
+    { id: 'lightning', name: 'Lightning Tower', reqBase: { 'Wind_2': 1, 'Fire_2': 1, 'Water_2': 1 }, reqCombo: {}, effect: 'Chain 3 Targets', color: '#E0FFFF', type: 'ATTACK', chain: 3 },
+    { id: 'storm', name: 'Thunderstorm', reqBase: { 'Wind_3': 1, 'Water_3': 1 }, reqCombo: { 'lightning': 1 }, effect: 'Chain 6 Targets', color: '#00CED1', type: 'ATTACK', chain: 6 },
+    { id: 'zephyr', name: 'Zephyr Tower', reqBase: { 'Wind_4': 1, 'Water_3': 1, 'Wind_3': 1 }, reqCombo: {}, effect: 'Chain 8 Targets rapidly', color: '#98FB98', type: 'ATTACK', chain: 8, spdMult: 0.5 },
+    { id: 'mjolnir', name: 'Mjolnir', reqBase: { 'Wind_4': 1, 'Fire_4': 1 }, reqCombo: { 'storm': 1, 'forge': 1 }, effect: 'Chain 15 Targets + High DMG (4-Elem)', color: '#FFA500', type: 'ATTACK', chain: 15, dmgMult: 5.0 },
+    { id: 'frostbite', name: 'Frostbite Tower', reqBase: { 'Ice_2': 1, 'Water_2': 1, 'Earth_2': 1 }, reqCombo: {}, effect: '20% Chance Freeze', color: '#B0E0E6', type: 'ATTACK', freezeChc: 0.2, freezeDur: 60 },
+    { id: 'glacier', name: 'Glacier Spike', reqBase: { 'Ice_3': 1, 'Earth_3': 1 }, reqCombo: { 'frostbite': 1 }, effect: '100% Freeze (Very Slow)', color: '#5F9EA0', type: 'ATTACK', freezeChc: 1.0, freezeDur: 120, spdMult: 4.0 },
+    { id: 'zero', name: 'Absolute Zero', reqBase: { 'Ice_4': 1, 'Water_4': 1 }, reqCombo: { 'glacier': 1, 'avalanche': 1 }, effect: '100% Freeze + Huge Splash (4-Elem)', color: '#00FFFF', type: 'ATTACK', freezeChc: 1.0, freezeDur: 180, splashMult: 4.0, dmgMult: 4.0 },
+
+    { id: 'sun', name: 'Sun Strike', reqBase: { 'Fire_3': 1, 'Earth_3': 1, 'Fire_2': 1 }, reqCombo: {}, effect: 'Aura: Heavy Burn (No ATK)', color: '#FF4500', type: 'SUPPORT', auraTarget: 'BURN', auraValue: 20 },
+    { id: 'inferno', name: 'Inferno', reqBase: { 'Fire_4': 1, 'Earth_4': 1 }, reqCombo: { 'sun': 1, 'magma': 1 }, effect: 'Aura: Extreme Burn (4-Elem)', color: '#FF0000', type: 'SUPPORT', auraTarget: 'BURN', auraValue: 120 },
+    { id: 'volcano', name: 'Volcano Tower', reqBase: { 'Earth_3': 1 }, reqCombo: { 'magma': 1, 'forge': 1 }, effect: 'Insane Splash + DMG Aura', color: '#FF0000', type: 'ATTACK', splashMult: 2.0, dmgMult: 3.0 },
+    { id: 'armageddon', name: 'Armageddon', reqBase: { 'Earth_5': 1, 'Fire_5': 1 }, reqCombo: { 'volcano': 1, 'meteor': 1 }, effect: 'Global Splash Destruction (4-Elem)', color: '#800000', type: 'ATTACK', dmgMult: 15.0, rngMult: 15.0, splashMult: 6.0, spdMult: 1.5 },
+    { id: 'tsunami', name: 'Tsunami Tower', reqBase: { 'Water_3': 1 }, reqCombo: { 'avalanche': 1, 'enchant': 1 }, effect: 'Massive Slow + Fast ATK', color: '#0000CD', type: 'ATTACK', applySlow: 0.8, spdMult: 0.5 },
+    { id: 'aegis', name: 'Aegis of Gods', reqBase: { 'Water_4': 1 }, reqCombo: { 'blessing': 1, 'oracle': 1, 'enchant': 1 }, effect: 'Aura: Omni-Buff (4-Elem)', color: '#FFD700', type: 'SUPPORT', auraTarget: 'OMNI', auraValue: 1 }
+];
+
+// --- MYSTERY SHOP ---
+const SHOP_POOL = [
+    { id: 'up1', name: 'Power Level', desc: '+1 Tier (Base)', cost: 120, apply: (t) => { if(t.isCombo || t.tier >= 5) return false; t.tier++; return true;} },
+    { id: 'dmg', name: 'Weapon Polish', desc: 'Perm +30% DMG', cost: 75, apply: (t) => { t.buffs.permDmg = (t.buffs.permDmg||0) + 0.3; return true; } },
+    { id: 'spd', name: 'Grease Gears', desc: 'Perm +30% ASPD', cost: 75, apply: (t) => { t.buffs.permSpd = (t.buffs.permSpd||0) + 0.3; return true; } },
+    { id: 'crit', name: 'Sharpen Edge', desc: 'Perm +15% CRIT', cost: 60, apply: (t) => { t.buffs.permCrit = (t.buffs.permCrit||0) + 0.15; return true; } },
+    { id: 'rng', name: 'Spyglass', desc: 'Perm +1.0 Range', cost: 45, apply: (t) => { t.buffs.permRng = (t.buffs.permRng||0) + 1.0; return true; } },
+    { id: 'rnd', name: 'Element Reroll', desc: 'Change Element', cost: 30, apply: (t) => { if(t.isCombo) return false; t.element = rollElement().element; return true; } },
+    { id: 'rnp', name: 'Lucky Reroll', desc: 'Change Ele (+1 Tier)', cost: 105, apply: (t) => { if(t.isCombo || t.tier >= 5) return false; t.element = rollElement().element; t.tier++; return true; } },
+    { id: 'del', name: 'Controlled De-level', desc: '-1 Tier Exactly', cost: 15, apply: (t) => { if(t.isCombo || t.tier <= 1) return false; t.tier--; return true; } }
+];
+
+// --- GAME STATE ---
+let state = STATES.BUILD_PLACE;
+let builderLevel = 1, exp = 0, gold = 40, lives = 50, waveNumber = 1;
+let grid = Array(ROWS).fill().map(() => Array(COLS).fill(null));
+let towers = [], stones = [], unrevealedSpawns = [];
+let enemies = [], projectiles = [], particles = [], cachedPath = [];
+let selectedSpawnIndex = -1, selectedTower = null, selectedStone = null;
+let frames = 0, waveEnemiesToSpawn = 0;
+let waveEnemyQueue = [], bonusEnemies = 0, leakedThisWave = false;
+let currentShop = [], shopBought = [false, false, false];
+
+// UI
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const btnLevelup = document.getElementById('btn-levelup');
+const btnKeep = document.getElementById('btn-keep');
+const btnDelevel = document.getElementById('btn-delevel');
+const btnUplevel = document.getElementById('btn-uplevel');
+const btnStartWave = document.getElementById('btn-startwave');
+
+// --- INITIALIZATION ---
+function populateModals() {
+    let elHtml = `<h3 style="border-bottom: 2px solid #555; padding-bottom: 5px; color: var(--gold);">Base Elements</h3>`;
+    elHtml += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 20px;">`;
+    for (let key in ELEMENTS) {
+        let e = ELEMENTS[key];
+        elHtml += `<div style="background: #222; padding: 10px; border-radius: 6px; border-left: 4px solid ${e.color};">
+            <span class="color-dot" style="background:${e.color}"></span><strong style="color:${e.color}">${e.name}</strong><br>
+            <span style="font-size:0.85em; color:#aaa;">Type: ${e.type} | SPL: ${e.splash||0} | BaseDMG: ${e.damage}${e.name==='Wind' ? ' | <span style="color:#D3D3D3">Aura: True Sight</span>' : ''}</span>
+        </div>`;
+    }
+    elHtml += `</div>`;
+    
+    elHtml += `<h3 style="border-bottom: 2px solid #555; padding-bottom: 5px; color: var(--gold);">Tower Combinations (32 Total)</h3>`;
+    elHtml += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px;">`;
+    for (let r of RECIPES) {
+        let reqs = [];
+        for (let req in r.reqBase) reqs.push(`${r.reqBase[req]}x T${req.split('_')[1]} ${req.split('_')[0]}`);
+        for (let req in r.reqCombo) reqs.push(`${r.reqCombo[req]}x ${RECIPES.find(x=>x.id===req).name}`);
+        
+        elHtml += `<div style="background: #222; padding: 10px; border-radius: 6px; border-left: 4px solid ${r.color};">
+            <strong style="color:${r.color}; font-size: 1.1em;">${r.name}</strong>
+            <div style="color: var(--gold); font-size: 0.9em; margin-bottom: 5px;">${r.effect}</div>
+            <div style="font-size: 0.8em; color: #aaa;">Requires: ${reqs.join(', ')}</div>
+        </div>`;
+    }
+    elHtml += `</div>`;
+    document.getElementById('elements-modal-content').innerHTML = elHtml;
+    
+    let waveHtml = `
+        <h3>Wave Scaling</h3>
+        <p>Every wave starts with 10 base enemies. A flawless wave (no leaks) increases the next wave's count by 1. A leak reduces it by 1 (minimum 10).</p>
+        <p>Enemies gain Base Armor equal to <strong>Wave Number * 2</strong>.</p>
+        <h3>Enemy Types & Buffs</h3>
+        <ul style="padding-left: 20px;">
+            <li style="margin-bottom:5px;"><strong style="color:#00ffff">SHIELD:</strong> Starts with 50% extra HP as a shield.</li>
+            <li style="margin-bottom:5px;"><strong style="color:#00ff00">REGEN:</strong> Passively heals 5% max HP per second.</li>
+            <li style="margin-bottom:5px;"><strong style="color:#ffffff">DASH:</strong> Gains massive speed boost for 1 second when hit.</li>
+            <li style="margin-bottom:5px;"><strong style="color:#ff00ff">IMMUNE:</strong> Immune to Slow/Freeze. Has 50% less Base Armor.</li>
+            <li style="margin-bottom:5px;"><strong style="color:#ff8c00">DISARM AURA:</strong> Disables towers within 3 squares range.</li>
+            <li style="margin-bottom:5px;"><strong style="color:#1e90ff">SLOW AURA:</strong> Reduces ASPD of towers within 3 squares based on wave.</li>
+            <li style="margin-bottom:5px;"><strong>FLYING:</strong> Spawns only after wave 5. Can only be hit by Air/Hybrid towers.</li>
+            <li style="margin-bottom:5px;"><strong>INVISIBLE:</strong> Can only be targeted by towers with True Sight. Appears on Wave 7, 14, etc.</li>
+            <li style="margin-bottom:5px;"><strong>BOSS:</strong> Appears every 10 waves. Huge HP, slow speed.</li>
+        </ul>
+        <p><em>* Under wave 20: 1 to 4 enemies carry a non-aura buff. Over wave 20: Enemies spawn in mixed factions, auras unlock (max 1-4 per wave). Boss counts increase at W10/W20/W30.</em></p>
+    `;
+    document.getElementById('waves-modal-content').innerHTML = waveHtml;
+}
+populateModals();
+
+// --- MENU CONTROLS ---
+document.getElementById('btn-menu').addEventListener('click', () => {
+    let d = document.getElementById('menu-dropdown'); d.style.display = d.style.display === 'none' ? 'block' : 'none';
+});
+document.addEventListener('click', (e) => {
+    let m = document.getElementById('btn-menu'), d = document.getElementById('menu-dropdown');
+    if (!m.contains(e.target) && !d.contains(e.target)) d.style.display = 'none';
+});
+
+document.getElementById('btn-restart').addEventListener('click', () => { document.getElementById('menu-dropdown').style.display = 'none'; document.getElementById('restart-modal').style.display = 'flex'; });
+document.getElementById('btn-elements').addEventListener('click', () => { document.getElementById('menu-dropdown').style.display = 'none'; document.getElementById('elements-modal').style.display = 'flex'; });
+document.getElementById('btn-waves').addEventListener('click', () => { document.getElementById('menu-dropdown').style.display = 'none'; document.getElementById('waves-modal').style.display = 'flex'; });
+document.getElementById('btn-restart-no').addEventListener('click', () => { document.getElementById('restart-modal').style.display = 'none'; });
+
+document.getElementById('btn-restart-yes').addEventListener('click', () => {
+    document.getElementById('restart-modal').style.display = 'none';
+    state = STATES.BUILD_PLACE; builderLevel = 1; exp = 0; gold = 40; lives = 50; waveNumber = 1;
+    grid = Array(ROWS).fill().map(() => Array(COLS).fill(null)); towers = []; stones = []; unrevealedSpawns = [];
+    enemies = []; projectiles = []; particles = []; selectedSpawnIndex = -1; selectedTower = null; selectedStone = null;
+    frames = 0; waveEnemiesToSpawn = 0; bonusEnemies = 0;
+    precalculateWave(); refreshShop(); cachedPath = calculateFullPath(); updateUI();
+});
+
+// --- PATHFINDING ---
+function isExclusionZone(x, y) { for (let wp of WAYPOINTS) if (x === wp.x && y === wp.y) return true; return false; }
+function getNeighbors(x, y) {
+    let n = [];
+    if (x > 0 && !grid[y][x-1]) n.push({x: x-1, y: y});
+    if (x < COLS-1 && !grid[y][x+1]) n.push({x: x+1, y: y});
+    if (y > 0 && !grid[y-1][x]) n.push({x: x, y: y-1});
+    if (y < ROWS-1 && !grid[y+1][x]) n.push({x: x, y: y+1});
+    return n;
+}
+function bfs(start, end) {
+    let q = [start], cameFrom = new Map(), visited = new Set();
+    visited.add(`${start.x},${start.y}`);
+    while (q.length > 0) {
+        let curr = q.shift();
+        if (curr.x === end.x && curr.y === end.y) { let path = [], c = curr; while (c) { path.push(c); c = cameFrom.get(`${c.x},${c.y}`); } return path.reverse(); }
+        for (let next of getNeighbors(curr.x, curr.y)) { let key = `${next.x},${next.y}`; if (!visited.has(key)) { q.push(next); visited.add(key); cameFrom.set(key, curr); } }
+    }
+    return null;
+}
+function calculateFullPath() {
+    let fPath = [];
+    for (let i = 0; i < WAYPOINTS.length - 1; i++) { let seg = bfs(WAYPOINTS[i], WAYPOINTS[i+1]); if (!seg) return null; if (i > 0) seg.shift(); fPath = fPath.concat(seg); }
+    return fPath;
+}
+function canPlace(x, y) {
+    if (grid[y][x] !== null) return false;
+    if (isExclusionZone(x, y)) return false; 
+    grid[y][x] = 'TEMP'; let path = calculateFullPath(); grid[y][x] = null; 
+    return path !== null;
+}
+
+// --- UTILITIES & UI ---
+function precalculateWave() {
+    let totalCount = 10 + bonusEnemies;
+    let isBossWave = (waveNumber % 10 === 0);
+    let isInvisWave = (waveNumber % 7 === 0);
+
+    let availableAuras = ['DISARM_AURA', 'SLOW_AURA'];
+    let availableSelfBuffs = ['SHIELD', 'REGEN', 'DASH', 'IMMUNE'];
+
+    waveEnemyQueue = [];
+
+    if (isBossWave) {
+        let bossCount = waveNumber >= 30 ? 3 : 2;
+        totalCount = bossCount; 
+        let shuffledBuffs = [...availableSelfBuffs].sort(() => 0.5 - Math.random());
+        if (waveNumber > 20) shuffledBuffs = [...availableSelfBuffs, ...availableAuras].sort(() => 0.5 - Math.random());
+
+        for (let i=0; i<bossCount; i++) {
+            waveEnemyQueue.push({ isBoss: true, buff: shuffledBuffs[i], isInvis: false });
+        }
+    } else {
+        let buffDistribution = [];
+        if (waveNumber <= 20) {
+            let buff = availableSelfBuffs[Math.floor(Math.random() * availableSelfBuffs.length)];
+            let numBuffed = Math.floor(Math.random() * 4) + 1;
+            for(let i=0; i<totalCount; i++) buffDistribution.push(i < numBuffed ? buff : null);
+            buffDistribution.sort(() => 0.5 - Math.random());
+        } else {
+            let numFactions = waveNumber >= 30 ? 3 : 2;
+            let allBuffs = [...availableSelfBuffs, ...availableAuras, null];
+            let chosenBuffs = [];
+            for(let i=0; i<numFactions; i++) {
+                let b = allBuffs[Math.floor(Math.random() * allBuffs.length)];
+                if (chosenBuffs.includes(b) && b !== null) b = null; 
+                chosenBuffs.push(b);
+            }
+
+            for(let i=0; i<totalCount; i++) buffDistribution.push(chosenBuffs[i % numFactions]);
+
+            let auraCount = 0;
+            let maxAuras = Math.floor(Math.random() * 4) + 1;
+            for(let i=0; i<totalCount; i++) {
+                if (availableAuras.includes(buffDistribution[i])) {
+                    auraCount++;
+                    if (auraCount > maxAuras) buffDistribution[i] = null;
+                }
+            }
+            buffDistribution.sort(() => 0.5 - Math.random());
+        }
+
+        for (let i=0; i<totalCount; i++) {
+            waveEnemyQueue.push({ isBoss: false, buff: buffDistribution[i], isInvis: isInvisWave });
+        }
+    }
+
+    waveEnemiesToSpawn = waveEnemyQueue.length;
+    leakedThisWave = false;
+
+    let infoText = `Wave ${waveNumber} - ${totalCount} Enemies`;
+    if (isBossWave) infoText += ` <span style="color:#ff00ff">[BOSS]</span>`;
+    if (isInvisWave && !isBossWave) infoText += ` <span style="color:#aaa">[INVISIBLE]</span>`;
+
+    let uniqueBuffs = [...new Set(waveEnemyQueue.map(e => e.buff).filter(b => b))];
+    if (uniqueBuffs.length > 0) infoText += `<br><span style="color:#ccc; font-weight:normal">Traits: ${uniqueBuffs.join(', ')}</span>`;
+    document.getElementById('next-wave-info').innerHTML = infoText;
+}
+
+function refreshShop() {
+    let pool = [...SHOP_POOL]; currentShop = [];
+    for(let i=0; i<3; i++) {
+        let idx = Math.floor(Math.random() * pool.length);
+        currentShop.push(pool[idx]); pool.splice(idx, 1);
+    }
+    shopBought = [false, false, false];
+}
+
+function calcTowerStats(t) {
+    t.baseDamage = t.element.damage * t.tier;
+    t.baseSpeed = Math.max(10, t.element.speed - (t.tier * 2));
+    t.baseCrit = 0.10 + (t.recipe?.critBonus || 0);
+    t.splash = t.element.splash || 0;
+    t.range = t.element.range;
+    t.burn = t.element.burn || 0;
+    t.slow = t.element.slow || 0;
+    t.pierce = t.recipe?.pierce || 0;
+    t.seeInvisible = t.isCombo ? (t.recipe?.seeInvis || false) : false;
+    
+    if (t.isCombo) {
+        if (t.recipe.type === 'SUPPORT') { t.baseDamage *= 0.5; t.range *= 0.8; } 
+        else { t.baseDamage *= (t.recipe.dmgMult || 2.0); t.range *= (t.recipe.rngMult || 1.5); }
+        if(t.recipe.spdMult) t.baseSpeed *= t.recipe.spdMult;
+        if(t.recipe.splashMult) t.splash *= t.recipe.splashMult;
+        if(t.recipe.applyBurn) t.burn = t.recipe.applyBurn; 
+        if(t.recipe.applySlow) t.slow = t.recipe.applySlow;
+    }
+}
+
+function renderStatsBlock(dStats, tower) {
+    let d_dmg = (tower.baseDamage * (1 + tower.buffs.damage + (tower.buffs.permDmg||0))).toFixed(1);
+    let d_spd = (tower.baseSpeed / (1 + tower.buffs.speed + (tower.buffs.permSpd||0))).toFixed(1);
+    let d_rng = (tower.range + (tower.buffs.permRng||0) + tower.buffs.range).toFixed(1);
+    let d_crt = Math.floor((tower.baseCrit + tower.buffs.crit + (tower.buffs.permCrit||0))*100);
+    let d_spl = tower.splash ? tower.splash.toFixed(1) : '0';
+    let d_ag = tower.element ? tower.element.type : 'N/A';
+    let p_val = Math.floor((tower.pierce + tower.buffs.pierce) * 100);
+
+    dStats.innerHTML = `
+        <div>DMG: ${d_dmg}</div><div>SPD: ${d_spd}</div><div>RNG: ${d_rng}</div>
+        <div>CRT: ${d_crt}%</div><div>SPL: ${d_spl}</div><div>A/G: ${d_ag}</div>
+    `;
+    if (p_val > 0) dStats.innerHTML += `<div style="grid-column: span 3; color:#ffb6c1; margin-top:3px;">Pierce: ${p_val}% Armor</div>`;
+    if (tower.isCombo) dStats.innerHTML += `<div style="grid-column: span 3; color:var(--gold); margin-top:3px;">Effect: ${tower.recipe.effect}</div>`;
+}
+
+function getTowerInventory() {
+    let base = {}, combo = {};
+    for (let t of towers) {
+        if (t.isCombo) { combo[t.recipe.id] = combo[t.recipe.id] || []; combo[t.recipe.id].push(t); }
+        else { let k = `${t.element.name}_${t.tier}`; base[k] = base[k] || []; base[k].push(t); }
+    }
+    return { base, combo };
+}
+
+function updateUI() {
+    document.getElementById('ui-lives').innerText = lives; document.getElementById('ui-gold').innerText = gold;
+    document.getElementById('ui-wave').innerText = waveNumber; document.getElementById('ui-level').innerText = builderLevel;
+    document.getElementById('ui-exp').innerText = exp;
+    
+    let req = builderLevel < 10 ? EXP_REQ[builderLevel] : 'MAX';
+    document.getElementById('ui-exp-req').innerText = req; btnLevelup.disabled = (builderLevel >= 10 || exp < req);
+    
+    document.getElementById('chance-lvl').innerText = builderLevel; let chances = SPAWN_CHANCES[builderLevel - 1];
+    for (let i = 1; i <= 5; i++) { let el = document.getElementById(`chc-${i}`); el.innerText = chances[i-1] + '%'; el.style.color = chances[i-1] > 0 ? 'var(--accent)' : '#555'; }
+
+    const sActions = document.getElementById('selection-actions'), sInfo = document.getElementById('selected-info');
+    const dStats = document.getElementById('detailed-stats'), rHints = document.getElementById('recipe-hints'), cActions = document.getElementById('craft-actions');
+    
+    sActions.style.display = 'none'; btnKeep.style.display = 'none'; btnDelevel.style.display = 'none'; btnUplevel.style.display = 'none';
+    dStats.innerHTML = ''; rHints.innerHTML = ''; cActions.innerHTML = '';
+
+    if (state === STATES.BUILD_PLACE) {
+        document.getElementById('phase-title').innerText = "Phase: Building"; document.getElementById('phase-desc').innerText = `Place 5 markers. (${unrevealedSpawns.length}/5)`;
+        btnStartWave.style.display = 'none';
+    } else if (state === STATES.BUILD_SELECT) {
+        document.getElementById('phase-title').innerText = "Phase: Selection"; document.getElementById('phase-desc').innerText = "Select a revealed tower to view info.";
+        btnStartWave.style.display = 'none';
+    } else if (state === STATES.BUILD_COMBINE) {
+        document.getElementById('phase-title').innerText = "Phase: Strategy"; document.getElementById('phase-desc').innerText = "Wave ready. Craft or Start Wave.";
+        btnStartWave.style.display = 'block';
+    } else if (state === STATES.WAVE) {
+        document.getElementById('phase-title').innerText = "Phase: Defense"; document.getElementById('phase-desc').innerText = `Enemies remaining: ${enemies.length + waveEnemiesToSpawn}`;
+        btnStartWave.style.display = 'none';
+    }
+
+    let targetTower = null;
+
+    if (selectedStone && state !== STATES.WAVE) {
+        sActions.style.display = 'block';
+        sInfo.innerHTML = `<span class="color-dot" style="background:#555"></span> Stone`; dStats.innerHTML = `Obstacle Block`;
+        let btnRem = document.createElement('button'); btnRem.className = 'btn-danger'; btnRem.innerText = 'Remove Stone (1 Gold)'; btnRem.disabled = gold < 1;
+        btnRem.onclick = () => { if (gold >= 1) { gold -= 1; grid[selectedStone.y][selectedStone.x] = null; stones = stones.filter(s => s !== selectedStone); selectedStone = null; cachedPath = calculateFullPath(); updateUI(); } };
+        cActions.appendChild(btnRem);
+    } else if (selectedTower) {
+        targetTower = selectedTower;
+        sActions.style.display = 'block';
+        let tName = targetTower.isCombo ? targetTower.comboName : `${TIERS[targetTower.tier-1]} ${targetTower.element.name}`;
+        let tColor = targetTower.isCombo ? targetTower.comboColor : targetTower.element.color;
+        sInfo.innerHTML = `<span class="color-dot" style="background:${tColor}"></span> ${tName}`;
+        
+        renderStatsBlock(dStats, targetTower);
+
+        if (state === STATES.BUILD_COMBINE && !targetTower.isCombo && targetTower.tier < 5) {
+            let key = `${targetTower.element.name}_${targetTower.tier}`, sameTowers = getTowerInventory().base[key] || [];
+            if (sameTowers.length >= 3) {
+                let btnMerge = document.createElement('button');
+                btnMerge.className = 'btn-accent'; btnMerge.innerText = `Merge 3x to ${TIERS[targetTower.tier]}`;
+                btnMerge.onclick = () => {
+                    let others = sameTowers.filter(t => t !== targetTower).slice(0, 2);
+                    for (let c of others) { towers = towers.filter(t => t !== c); stones.push({x: c.x, y: c.y}); grid[c.y][c.x] = 'STONE'; }
+                    targetTower.tier++; calcTowerStats(targetTower); cachedPath = calculateFullPath(); updateUI();
+                };
+                cActions.appendChild(btnMerge);
+            }
+        }
+    } else if (selectedSpawnIndex >= 0 && unrevealedSpawns[selectedSpawnIndex]) {
+        sActions.style.display = 'block';
+        let t = unrevealedSpawns[selectedSpawnIndex];
+        sInfo.innerHTML = `<span class="color-dot" style="background:${t.element.color}"></span> ${TIERS[t.tier-1]} ${t.element.name}`;
+        
+        targetTower = { element: t.element, tier: t.tier, isCombo: false, buffs: { damage: 0, speed: 0, crit: 0, range: 0, pierce: 0, trueSight: false, antiCC: false } };
+        calcTowerStats(targetTower);
+        renderStatsBlock(dStats, targetTower);
+
+        if (state === STATES.BUILD_SELECT) {
+            btnKeep.style.display = 'block';
+            let identicalCount = 0;
+            for (let s of unrevealedSpawns) if (s.element.name === t.element.name && s.tier === t.tier) identicalCount++;
+            
+            if (identicalCount >= 3 && t.tier < 5) {
+                btnUplevel.style.display = 'block'; btnUplevel.disabled = false;
+            } else {
+                btnDelevel.style.display = 'block'; btnDelevel.disabled = (gold < 5 || t.tier <= 1);
+            }
+            btnKeep.disabled = false;
+        }
+    } else if (state === STATES.BUILD_SELECT) {
+        sActions.style.display = 'block'; sInfo.innerText = "None Selected";
+    }
+
+    // Dynamic Recipe UI Builder
+    if (targetTower) {
+        let inv = getTowerInventory();
+        if (!towers.includes(targetTower) && !targetTower.isCombo && targetTower.element) {
+            let key = `${targetTower.element.name}_${targetTower.tier}`;
+            if (!inv.base[key]) inv.base[key] = [];
+            inv.base[key].push(targetTower);
+        }
+
+        for (let r of RECIPES) {
+            let isPart = false;
+            if (targetTower.isCombo && r.reqCombo[targetTower.recipe.id]) isPart = true;
+            if (!targetTower.isCombo && targetTower.element && r.reqBase[`${targetTower.element.name}_${targetTower.tier}`]) isPart = true;
+            
+            if (isPart) {
+                let reqList = [];
+                let tempBase = {}, tempCombo = {};
+                for (let k in inv.base) tempBase[k] = inv.base[k].length;
+                for (let k in inv.combo) tempCombo[k] = inv.combo[k].length;
+                
+                let valid = true;
+
+                for (let req in r.reqBase) {
+                    let p = req.split('_'), name = `${TIERS[p[1]-1]} ${p[0]}`;
+                    let needed = r.reqBase[req];
+                    if ((tempBase[req] || 0) < needed) valid = false;
+                    
+                    for(let i=0; i<needed; i++) {
+                        if (tempBase[req] > 0) {
+                            reqList.push(`<span style="color:var(--accent); font-weight:bold">${name}</span>`);
+                            tempBase[req]--;
+                        } else {
+                            reqList.push(`<span style="color:#aaa">${name}</span>`);
+                        }
+                    }
+                }
+                for (let req in r.reqCombo) {
+                    let cr = RECIPES.find(x => x.id === req), name = cr ? cr.name : req;
+                    let needed = r.reqCombo[req];
+                    if ((tempCombo[req] || 0) < needed) valid = false;
+
+                    for(let i=0; i<needed; i++) {
+                        if (tempCombo[req] > 0) {
+                            reqList.push(`<span style="color:var(--accent); font-weight:bold">${name}</span>`);
+                            tempCombo[req]--;
+                        } else {
+                            reqList.push(`<span style="color:#aaa">${name}</span>`);
+                        }
+                    }
+                }
+                
+                let div = document.createElement('div');
+                div.className = 'recipe-hint';
+                div.style.borderLeft = `4px solid ${r.color}`;
+                div.innerHTML = `<strong>${r.name}</strong><br>${reqList.join(' + ')}`;
+                
+                if (valid && state === STATES.BUILD_COMBINE && selectedTower) {
+                    div.classList.add('clickable-recipe');
+                    div.style.cursor = 'pointer';
+                    div.innerHTML += `<br><span style="color:var(--accent); font-weight:bold; font-size:0.9em; display:block; margin-top:4px;">▶ Click to Craft</span>`;
+                    div.onclick = () => processCombine(selectedTower, r);
+                }
+                rHints.appendChild(div);
+            }
+        }
+    }
+
+    const sItems = document.getElementById('shop-items'); sItems.innerHTML = '';
+    currentShop.forEach((item, idx) => {
+        let btn = document.createElement('button'); btn.className = 'btn-shop';
+        btn.innerHTML = `<strong>${item.name}</strong><br><span style="font-size:0.8em">${item.desc}</span><br><span style="color:var(--gold)">${item.cost} Gold</span>`;
+        btn.disabled = shopBought[idx] || gold < item.cost || state !== STATES.BUILD_COMBINE || !selectedTower;
+        btn.onclick = () => { if (selectedTower && item.apply(selectedTower)) { gold -= item.cost; shopBought[idx] = true; calcTowerStats(selectedTower); updateUI(); } };
+        sItems.appendChild(btn);
+    });
+}
+
+// --- GAME LOGIC ---
+function rollElement() {
+    const keys = Object.keys(ELEMENTS);
+    let elKey = keys[Math.floor(Math.random() * keys.length)];
+    let p = SPAWN_CHANCES[builderLevel - 1], roll = Math.random() * 100, sum = 0, tier = 1;
+    for (let i = 0; i < 5; i++) { sum += p[i]; if (roll <= sum) { tier = i + 1; break; } }
+    return { element: ELEMENTS[elKey], tier: tier };
+}
+
+function keepTowerIndex(index) {
+    let kept = unrevealedSpawns[index];
+    let t = {
+        x: kept.x, y: kept.y, element: kept.element, tier: kept.tier, cooldown: 0,
+        isCombo: false, buffs: { damage: 0, speed: 0, crit: 0, range: 0, pierce: 0, trueSight: false, antiCC: false }
+    };
+    calcTowerStats(t); towers.push(t); grid[kept.y][kept.x] = 'TOWER';
+    
+    for (let i = 0; i < unrevealedSpawns.length; i++) {
+        if (i !== index) { let s = unrevealedSpawns[i]; stones.push({x: s.x, y: s.y}); grid[s.y][s.x] = 'STONE'; }
+    }
+    unrevealedSpawns = []; selectedSpawnIndex = -1; cachedPath = calculateFullPath(); state = STATES.BUILD_COMBINE;
+    
+    if (waveNumber % 3 === 1) refreshShop();
+    updateUI();
+}
+
+btnKeep.addEventListener('click', () => { if (selectedSpawnIndex >= 0) keepTowerIndex(selectedSpawnIndex); });
+
+btnUplevel.addEventListener('click', () => {
+    if (selectedSpawnIndex >= 0) {
+        let t = unrevealedSpawns[selectedSpawnIndex];
+        let identicalCount = 0;
+        for (let s of unrevealedSpawns) if (s.element.name === t.element.name && s.tier === t.tier) identicalCount++;
+        
+        if (identicalCount >= 3 && t.tier < 5) {
+            t.tier++;
+            keepTowerIndex(selectedSpawnIndex);
+        }
+    }
+});
+
+btnDelevel.addEventListener('click', () => {
+    if (selectedSpawnIndex >= 0 && gold >= 5) {
+        let t = unrevealedSpawns[selectedSpawnIndex];
+        if (t.tier > 1) { gold -= 5; t.tier = Math.floor(Math.random() * (t.tier - 1)) + 1; keepTowerIndex(selectedSpawnIndex); }
+    }
+});
+btnLevelup.addEventListener('click', () => { let req = EXP_REQ[builderLevel]; if (exp >= req && builderLevel < 10) { exp -= req; builderLevel++; updateUI(); } });
+
+
+function processCombine(baseTower, recipe) {
+    let inv = getTowerInventory(), consumed = [];
+    let nBase = { ...recipe.reqBase }, nCombo = { ...recipe.reqCombo };
+
+    if (baseTower.isCombo && nCombo[baseTower.recipe.id]) nCombo[baseTower.recipe.id]--;
+    else if (!baseTower.isCombo) { let k = `${baseTower.element.name}_${baseTower.tier}`; if (nBase[k]) nBase[k]--; }
+    
+    for (let r in nBase) for (let i = 0; i < nBase[r]; i++) consumed.push(inv.base[r].find(tow => tow !== baseTower && !consumed.includes(tow)));
+    for (let r in nCombo) for (let i = 0; i < nCombo[r]; i++) consumed.push(inv.combo[r].find(tow => tow !== baseTower && !consumed.includes(tow)));
+
+    for (let c of consumed) { towers = towers.filter(t => t !== c); stones.push({x: c.x, y: c.y}); grid[c.y][c.x] = 'STONE'; }
+
+    baseTower.isCombo = true; baseTower.recipe = recipe; baseTower.comboName = recipe.name; baseTower.comboColor = recipe.color; baseTower.tier += 2; 
+    baseTower.chain = recipe.chain || 0; baseTower.freezeChc = recipe.freezeChc || 0; baseTower.freezeDur = recipe.freezeDur || 0;
+    
+    calcTowerStats(baseTower); selectedTower = baseTower; cachedPath = calculateFullPath(); updateUI();
+}
+
+btnStartWave.addEventListener('click', () => { state = STATES.WAVE; waveSpawnTimer = 0; selectedTower = null; selectedStone = null; updateUI(); });
+
+function spawnEnemy() {
+    let def = waveEnemyQueue.shift();
+    let hpMult = Math.pow(1.25, waveNumber);
+    let baseHp = def.isBoss ? 400 : 16;
+    let spdMult = 1 + (waveNumber * 0.05);
+    let baseSpd = def.isBoss ? 0.64 : 0.96;
+    
+    let enemy = {
+        x: WAYPOINTS[0].x * CELL_SIZE + CELL_SIZE/2, y: WAYPOINTS[0].y * CELL_SIZE + CELL_SIZE/2, pathIndex: 0,
+        hp: baseHp * hpMult, maxHp: baseHp * hpMult, speed: baseSpd * spdMult,
+        type: (Math.random() > 0.7 && !def.isBoss && !def.isInvis && waveNumber > 5) ? 'AIR' : 'GRND',
+        isBoss: def.isBoss, invisible: def.isInvis, slowTimer: 0, burnTimer: 0, freezeTimer: 0, buffs: [],
+        armor: waveNumber * 2 
+    };
+
+    if (def.buff) {
+        enemy.buffs.push(def.buff);
+        if (def.buff === 'SHIELD') enemy.shield = enemy.maxHp * 0.5; 
+        if (def.buff === 'DASH') enemy.dashTimer = 0;
+        if (def.buff === 'IMMUNE') enemy.armor = Math.floor(enemy.armor * 0.5);
+    }
+    enemies.push(enemy);
+}
+
+function damageEnemy(e, amt, pTower) {
+    if (e.buffs.includes('DASH')) e.dashTimer = 60; 
+    
+    let pierce = (pTower && pTower.pierce ? pTower.pierce : 0) + (pTower ? pTower.buffs.pierce : 0);
+    let effArmor = Math.max(0, e.armor * (1 - pierce));
+    let dmgReduction = 100 / (100 + effArmor);
+    amt *= dmgReduction;
+
+    if (e.shield > 0) {
+        if (amt > e.shield) { amt -= e.shield; e.shield = 0; } else { e.shield -= amt; amt = 0; }
+    }
+    e.hp -= amt;
+    if (e.hp <= 0 && !e.dead) {
+        e.dead = true; gold += e.isBoss ? 20 : 1; createParticles(e.x, e.y, e.isBoss ? '#800080' : '#ff0000');
+    }
+}
+
+canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const gridX = Math.floor((e.clientX - rect.left) / CELL_SIZE), gridY = Math.floor((e.clientY - rect.top) / CELL_SIZE);
+    let clickedStone = stones.find(s => s.x === gridX && s.y === gridY), clickedTower = towers.find(t => t.x === gridX && t.y === gridY);
+    let clickedSpawnIndex = unrevealedSpawns.findIndex(s => s.x === gridX && s.y === gridY);
+
+    if (state === STATES.BUILD_PLACE) {
+        if (clickedTower) { selectedTower = clickedTower; selectedStone = null; selectedSpawnIndex = -1; updateUI(); } 
+        else if (clickedStone) { selectedStone = clickedStone; selectedTower = null; selectedSpawnIndex = -1; updateUI(); } 
+        else if (canPlace(gridX, gridY)) {
+            let roll = rollElement(); unrevealedSpawns.push({x: gridX, y: gridY, element: roll.element, tier: roll.tier, isRevealed: true}); grid[gridY][gridX] = 'TEMP';
+            selectedTower = null; selectedStone = null; selectedSpawnIndex = -1; updateUI();
+            if (unrevealedSpawns.length === 5) { state = STATES.BUILD_SELECT; updateUI(); }
+        }
+    } else if (state === STATES.BUILD_SELECT) {
+        if (clickedSpawnIndex >= 0) { selectedSpawnIndex = clickedSpawnIndex; selectedTower = null; selectedStone = null; } 
+        else if (clickedTower) { selectedTower = clickedTower; selectedSpawnIndex = -1; selectedStone = null; } 
+        else if (clickedStone) { selectedStone = clickedStone; selectedSpawnIndex = -1; selectedTower = null; } 
+        else { selectedSpawnIndex = -1; selectedTower = null; selectedStone = null; }
+        updateUI();
+    } else if (state === STATES.BUILD_COMBINE || state === STATES.WAVE) {
+        if (clickedStone && state !== STATES.WAVE) { selectedStone = clickedStone; selectedTower = null; } 
+        else if (clickedTower) { selectedTower = clickedTower; selectedStone = null; } 
+        else { selectedTower = null; selectedStone = null; }
+        selectedSpawnIndex = -1; updateUI();
+    }
+});
+
+// --- RENDER & UPDATE LOOP ---
+function drawRect(x, y, color, sizeRatio = 1.0) {
+    let offset = (CELL_SIZE - (CELL_SIZE * sizeRatio)) / 2; ctx.fillStyle = color; ctx.fillRect(x * CELL_SIZE + offset, y * CELL_SIZE + offset, CELL_SIZE * sizeRatio, CELL_SIZE * sizeRatio);
+}
+function createParticles(x, y, color) { for (let i=0; i<10; i++) particles.push({ x: x, y: y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, life: 20+Math.random()*10, color: color }); }
+
+function gameLoop() {
+    frames++;
+    if (state === STATES.WAVE) {
+        if (waveEnemiesToSpawn > 0 && frames % 30 === 0) { spawnEnemy(); waveEnemiesToSpawn--; updateUI(); }
+
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            let e = enemies[i], currentSpeed = e.speed;
+            if (e.freezeTimer > 0) { currentSpeed = 0; e.freezeTimer--; } else if (e.slowTimer > 0) { currentSpeed *= 0.6; e.slowTimer--; }
+            if (e.burnTimer > 0) { if (frames % 30 === 0) damageEnemy(e, e.maxHp * 0.02 + 5, null); e.burnTimer--; }
+            if (e.buffs.includes('REGEN') && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + (e.maxHp * 0.05)/60);
+            if (e.buffs.includes('DASH') && e.dashTimer > 0) { currentSpeed *= 1.5; e.dashTimer--; }
+
+            if (e.pathIndex < cachedPath.length - 1) {
+                let target = cachedPath[e.pathIndex + 1], tx = target.x * CELL_SIZE + CELL_SIZE/2, ty = target.y * CELL_SIZE + CELL_SIZE/2;
+                let dx = tx - e.x, dy = ty - e.y, dist = Math.hypot(dx, dy);
+                if (dist < currentSpeed) { e.x = tx; e.y = ty; e.pathIndex++; } else { e.x += (dx / dist) * currentSpeed; e.y += (dy / dist) * currentSpeed; }
+            } else {
+                lives--; e.dead = true; leakedThisWave = true;
+                if (lives <= 0) { state = STATES.GAME_OVER; updateUI(); }
+            }
+        }
+        enemies = enemies.filter(e => !e.dead);
+
+        for (let t of towers) { t.buffs = { damage: 0, speed: 0, crit: 0, range: 0, pierce: 0, trueSight: false, antiCC: false }; t.enemyDebuffs = { disarmed: false, spdReduction: 0 }; }
+        
+        // Pass 1: Allied Auras
+        for (let t of towers) {
+            let rPx = ((t.range + (t.buffs.permRng||0)) * CELL_SIZE);
+            
+            // Base Wind True Sight Aura
+            if (!t.isCombo && t.element && t.element.name === 'Wind') {
+                for (let other of towers) if (Math.hypot((other.x - t.x)*CELL_SIZE, (other.y - t.y)*CELL_SIZE) <= rPx) other.buffs.trueSight = true;
+                t.buffs.trueSight = true;
+            }
+
+            if (t.isCombo && t.recipe && t.recipe.type === 'SUPPORT') {
+                for (let other of towers) {
+                    if (t === other) continue;
+                    if (Math.hypot((other.x - t.x)*CELL_SIZE, (other.y - t.y)*CELL_SIZE) <= rPx) {
+                        let rt = t.recipe.auraTarget;
+                        let rv = t.recipe.auraValue;
+                        if (rt === 'SPEED') other.buffs.speed += rv;
+                        if (rt === 'DAMAGE') other.buffs.damage += rv;
+                        if (rt === 'CRIT') other.buffs.crit += rv;
+                        if (rt === 'RANGE') other.buffs.range += rv;
+                        if (rt === 'PIERCE') other.buffs.pierce += rv;
+                        if (rt === 'TRUE_SIGHT') other.buffs.trueSight = true;
+                        if (rt === 'ANTI_CC') other.buffs.antiCC = true;
+                        if (rt === 'OMNI') {
+                            other.buffs.antiCC = true; other.buffs.trueSight = true; 
+                            other.buffs.speed += 0.8; other.buffs.damage += 0.8; 
+                            other.buffs.crit += 0.3;  other.buffs.pierce += 0.3;
+                        }
+                        
+                        if (rt === 'BURN' && frames % 30 === 0) {
+                            for (let e of enemies) {
+                                if (Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) damageEnemy(e, rv, t);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Pass 2: Enemy Auras
+        for (let e of enemies) {
+            if (e.buffs.includes('DISARM_AURA')) {
+                let rPx = 3 * CELL_SIZE;
+                for (let t of towers) if (!t.buffs.antiCC && Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) t.enemyDebuffs.disarmed = true;
+            }
+            if (e.buffs.includes('SLOW_AURA')) {
+                let rPx = 3 * CELL_SIZE;
+                for (let t of towers) if (!t.buffs.antiCC && Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) t.enemyDebuffs.spdReduction = Math.min(0.8, waveNumber * 0.02);
+            }
+        }
+
+        // Shooting
+        for (let t of towers) {
+            if (t.recipe && t.recipe.auraTarget === 'BURN') continue; 
+            if (t.enemyDebuffs.disarmed) continue;
+            
+            if (t.cooldown > 0) t.cooldown--;
+            else {
+                let px = t.x * CELL_SIZE + CELL_SIZE/2, py = t.y * CELL_SIZE + CELL_SIZE/2, rangePx = (t.range + (t.buffs.permRng||0) + t.buffs.range) * CELL_SIZE;
+                let target = null;
+                for (let e of enemies) {
+                    if (e.invisible && !t.seeInvisible && !t.buffs.trueSight) continue;
+                    if (t.element.type === 'GRND' && e.type === 'AIR') continue;
+                    if (t.element.type === 'AIR' && e.type === 'GRND') continue;
+                    if (Math.hypot(e.x - px, e.y - py) <= rangePx) { target = e; break; }
+                }
+
+                if (target) {
+                    let effSpeed = t.baseSpeed / (1 + t.buffs.speed + (t.buffs.permSpd||0));
+                    effSpeed /= (1 - t.enemyDebuffs.spdReduction);
+                    projectiles.push({ x: px, y: py, target: target, tower: t, speed: 10, chain: t.chain, hitList: [] });
+                    t.cooldown = Math.max(5, effSpeed); 
+                }
+            }
+        }
+
+        for (let i = projectiles.length - 1; i >= 0; i--) {
+            let p = projectiles[i];
+            if (p.target.dead) { projectiles.splice(i, 1); continue; }
+            
+            let dx = p.target.x - p.x, dy = p.target.y - p.y, dist = Math.hypot(dx, dy);
+            if (dist < p.speed) {
+                let dmg = p.tower.baseDamage * (1 + p.tower.buffs.damage + (p.tower.buffs.permDmg||0));
+                let isCrit = Math.random() < (p.tower.baseCrit + p.tower.buffs.crit + (p.tower.buffs.permCrit||0));
+                if (isCrit) dmg *= 2;
+
+                if (p.tower.splash) {
+                    let sRad = p.tower.splash * CELL_SIZE;
+                    for (let e of enemies) {
+                        if (Math.hypot(e.x - p.target.x, e.y - p.target.y) < sRad) {
+                            damageEnemy(e, dmg * 0.5, p.tower);
+                            if (p.tower.slow && !e.buffs.includes('IMMUNE')) e.slowTimer = 60 * p.tower.tier;
+                        }
+                    }
+                }
+                
+                damageEnemy(p.target, dmg, p.tower);
+                if (p.tower.burn) p.target.burnTimer = 60 * p.tower.tier;
+                if (p.tower.slow && !p.target.buffs.includes('IMMUNE')) p.target.slowTimer = 60 * p.tower.tier;
+                if (p.tower.freezeChc && Math.random() < p.tower.freezeChc && !p.target.buffs.includes('IMMUNE')) p.target.freezeTimer = p.tower.freezeDur;
+                
+                createParticles(p.target.x, p.target.y, isCrit ? '#ffffff' : (p.tower.isCombo ? p.tower.comboColor : p.tower.element.color));
+                
+                if (p.chain > 0) {
+                    p.hitList.push(p.target);
+                    let nextTarget = enemies.find(en => en !== p.target && !en.dead && Math.hypot(en.x - p.target.x, en.y - p.target.y) < CELL_SIZE*4 && !p.hitList.includes(en) && (!en.invisible || p.tower.seeInvisible || p.tower.buffs.trueSight));
+                    if (nextTarget) { p.target = nextTarget; p.chain--; p.tower.baseDamage *= 0.8; continue; }
+                }
+                projectiles.splice(i, 1);
+            } else { p.x += (dx / dist) * p.speed; p.y += (dy / dist) * p.speed; }
+        }
+
+        for (let i = particles.length - 1; i >= 0; i--) { let pt = particles[i]; pt.x += pt.vx; pt.y += pt.vy; pt.life--; if (pt.life <= 0) particles.splice(i, 1); }
+
+        if (waveEnemiesToSpawn === 0 && enemies.length === 0 && state === STATES.WAVE) {
+            exp += 2; waveNumber++; 
+            if (!leakedThisWave) bonusEnemies++; else bonusEnemies = Math.max(0, bonusEnemies - 1);
+            precalculateWave(); state = STATES.BUILD_PLACE;
+            selectedTower = null; selectedStone = null; projectiles = []; particles = []; updateUI();
+        }
+    }
+
+    // DRAW
+    ctx.fillStyle = '#111'; ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    
+    if (state === STATES.BUILD_PLACE) {
+        ctx.fillStyle = 'rgba(255,0,0,0.1)'; WAYPOINTS.forEach(wp => { ctx.fillRect(wp.x*CELL_SIZE, wp.y*CELL_SIZE, CELL_SIZE, CELL_SIZE); });
+    }
+
+    ctx.strokeStyle = '#222'; ctx.lineWidth = 1;
+    for(let i=0; i<=COLS; i++) { ctx.beginPath(); ctx.moveTo(i*CELL_SIZE, 0); ctx.lineTo(i*CELL_SIZE, CANVAS_SIZE); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, i*CELL_SIZE); ctx.lineTo(CANVAS_SIZE, i*CELL_SIZE); ctx.stroke(); }
+
+    if (cachedPath.length > 0) {
+        // Base faint line
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)'; ctx.lineWidth = 10; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
+        for (let i=0; i<cachedPath.length; i++) { let px = cachedPath[i].x * CELL_SIZE + CELL_SIZE/2, py = cachedPath[i].y * CELL_SIZE + CELL_SIZE/2; if(i===0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+        ctx.stroke();
+        
+        // Animated flowing arrows
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        for (let i = 0; i < cachedPath.length - 1; i++) {
+            if ((i - Math.floor(frames / 10)) % 4 === 0) {
+                let p1 = cachedPath[i];
+                let p2 = cachedPath[i+1];
+                let cx = p1.x * CELL_SIZE + CELL_SIZE/2;
+                let cy = p1.y * CELL_SIZE + CELL_SIZE/2;
+                let angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.rotate(angle);
+                ctx.beginPath();
+                ctx.moveTo(-6, -6);
+                ctx.lineTo(6, 0);
+                ctx.lineTo(-6, 6);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+    }
+
+    WAYPOINTS.forEach((wp, idx) => { 
+        ctx.fillStyle = 'rgba(255,255,0,0.15)';
+        ctx.fillRect(wp.x*CELL_SIZE, wp.y*CELL_SIZE, CELL_SIZE, CELL_SIZE);
+        
+        // Draw Checkpoint Numbers
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(idx + 1, wp.x*CELL_SIZE + CELL_SIZE/2, wp.y*CELL_SIZE + CELL_SIZE/2);
+    });
+
+    for (let s of stones) { drawRect(s.x, s.y, '#333', 0.9); if (selectedStone === s) { ctx.strokeStyle = '#f44336'; ctx.lineWidth = 2; ctx.strokeRect(s.x*CELL_SIZE, s.y*CELL_SIZE, CELL_SIZE, CELL_SIZE); } }
+    
+    for (let i=0; i<unrevealedSpawns.length; i++) { 
+        let s = unrevealedSpawns[i]; drawRect(s.x, s.y, s.element.color, 0.5+(s.tier*0.1)); 
+        if (i === selectedSpawnIndex) { 
+            ctx.strokeStyle = 'yellow'; ctx.lineWidth=2; ctx.strokeRect(s.x*CELL_SIZE, s.y*CELL_SIZE, CELL_SIZE, CELL_SIZE); 
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.beginPath(); ctx.arc(s.x*CELL_SIZE+CELL_SIZE/2, s.y*CELL_SIZE+CELL_SIZE/2, s.element.range * CELL_SIZE, 0, Math.PI*2); ctx.stroke();
+        } 
+    }
+
+    for (let t of towers) {
+        let size = Math.min(0.95, 0.5 + (t.tier * 0.08));
+        ctx.fillStyle = t.isCombo ? t.comboColor : t.element.color;
+        
+        if (t.isCombo) {
+            let cx = t.x * CELL_SIZE + CELL_SIZE/2, cy = t.y * CELL_SIZE + CELL_SIZE/2, r = (CELL_SIZE/2) * size;
+            ctx.beginPath();
+            if (t.recipe && t.recipe.type === 'SUPPORT') { ctx.arc(cx, cy, r*0.8, 0, Math.PI*2); ctx.fill(); } 
+            else { ctx.moveTo(cx, cy-r); ctx.lineTo(cx+r, cy); ctx.lineTo(cx, cy+r); ctx.lineTo(cx-r, cy); ctx.fill(); }
+        } else {
+            drawRect(t.x, t.y, t.element.color, size);
+            ctx.fillStyle = 'white'; for(let i=0; i<t.tier; i++) ctx.fillRect(t.x*CELL_SIZE + 2 + (i*4), t.y*CELL_SIZE + 2, 3, 3);
+        }
+
+        if (selectedTower === t) {
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(t.x*CELL_SIZE + 1, t.y*CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.beginPath(); ctx.arc(t.x*CELL_SIZE+CELL_SIZE/2, t.y*CELL_SIZE+CELL_SIZE/2, (t.range+(t.buffs.permRng||0)+t.buffs.range) * CELL_SIZE, 0, Math.PI*2); ctx.stroke();
+        }
+        
+        if (t.enemyDebuffs && t.enemyDebuffs.disarmed) { ctx.strokeStyle = 'red'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(t.x*CELL_SIZE, t.y*CELL_SIZE); ctx.lineTo(t.x*CELL_SIZE+CELL_SIZE, t.y*CELL_SIZE+CELL_SIZE); ctx.stroke(); }
+        else if (t.enemyDebuffs && t.enemyDebuffs.spdReduction > 0) { ctx.fillStyle = 'rgba(30,144,255,0.4)'; ctx.fillRect(t.x*CELL_SIZE, t.y*CELL_SIZE, CELL_SIZE, CELL_SIZE); }
+    }
+
+    for (let e of enemies) {
+        if (e.invisible) { ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.strokeStyle = '#fff'; } 
+        else { ctx.fillStyle = e.isBoss ? '#800080' : (e.type === 'AIR' ? '#ADD8E6' : '#FF0000'); ctx.strokeStyle = 'transparent'; }
+        
+        ctx.beginPath(); let r = e.isBoss ? 14 : 8; ctx.arc(e.x, e.y, r, 0, Math.PI*2); ctx.fill(); if(e.invisible) ctx.stroke();
+        
+        if (e.freezeTimer > 0) { ctx.fillStyle = 'rgba(0,255,255,0.5)'; ctx.fillRect(e.x-r, e.y-r, r*2, r*2); }
+        if (e.buffs.includes('SHIELD') && e.shield > 0) { ctx.strokeStyle = '#00ffff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(e.x, e.y, r + 3, 0, Math.PI*2); ctx.stroke(); }
+        if (e.buffs.includes('REGEN')) { ctx.fillStyle = '#00ff00'; ctx.fillRect(e.x - 2, e.y - 2, 4, 4); }
+        if (e.buffs.includes('DASH') && e.dashTimer > 0) { ctx.strokeStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x - (e.speed * 4), e.y); ctx.stroke(); }
+        if (e.buffs.includes('IMMUNE')) { ctx.fillStyle = '#ff00ff'; ctx.fillRect(e.x - 4, e.y - 4, 8, 8); }
+        
+        if (e.buffs.includes('DISARM_AURA')) { ctx.strokeStyle = 'rgba(255, 140, 0, 0.4)'; ctx.beginPath(); ctx.arc(e.x, e.y, 3*CELL_SIZE, 0, Math.PI*2); ctx.stroke(); }
+        if (e.buffs.includes('SLOW_AURA')) { ctx.strokeStyle = 'rgba(30, 144, 255, 0.4)'; ctx.beginPath(); ctx.arc(e.x, e.y, 3*CELL_SIZE, 0, Math.PI*2); ctx.stroke(); }
+
+        let hpY = e.y - r - 6; ctx.fillStyle = 'red'; ctx.fillRect(e.x - 10, hpY, 20, 4); ctx.fillStyle = 'lime'; ctx.fillRect(e.x - 10, hpY, 20 * (e.hp/e.maxHp), 4);
+    }
+
+    for (let p of projectiles) { ctx.fillStyle = p.tower.isCombo ? p.tower.comboColor : p.tower.element.color; if (p.tower.chain > 0) ctx.fillStyle = '#E0FFFF'; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill(); }
+    for (let pt of particles) { ctx.fillStyle = pt.color; ctx.globalAlpha = pt.life / 30; ctx.fillRect(pt.x, pt.y, 3, 3); }
+    ctx.globalAlpha = 1.0;
+
+    if (state !== STATES.GAME_OVER) requestAnimationFrame(gameLoop);
+    else { ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0,0,CANVAS_SIZE, CANVAS_SIZE); ctx.fillStyle = 'white'; ctx.font = '40px Arial'; ctx.fillText("GAME OVER", CANVAS_SIZE/2 - 120, CANVAS_SIZE/2); }
+}
+
+precalculateWave(); refreshShop(); cachedPath = calculateFullPath(); updateUI(); requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
