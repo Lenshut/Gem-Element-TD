@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maze TD Prototype</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, minimum-scale=0.5">
+    <title>Maze TD Prototype - 32x32 Grid</title>
     <style>
         :root {
             --bg: #000000; 
@@ -22,30 +22,82 @@
             display: flex;
             justify-content: center;
             gap: 20px;
-            user-select: none;
+            touch-action: manipulation;
         }
         #game-container {
             position: relative;
             background-color: var(--bg);
             border: 2px solid #222;
             box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            width: 1024px;
+            height: 1024px;
+            flex-shrink: 0;
         }
         canvas {
             display: block;
             cursor: crosshair;
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
         }
         #ui-panel {
             width: 340px;
             display: flex;
             flex-direction: column;
             gap: 15px;
+            flex-shrink: 0;
         }
+
+        /* Mobile Layout */
+        @media (max-width: 1100px) {
+            body {
+                flex-direction: column;
+                align-items: center;
+                padding: 10px;
+            }
+            #game-container {
+                width: 100%;
+                max-width: 1024px;
+                height: auto;
+                aspect-ratio: 1 / 1;
+            }
+            #ui-panel {
+                width: 100%;
+                max-width: 512px;
+            }
+        }
+
         .card {
             background-color: var(--panel);
             padding: 15px;
             border-radius: 8px;
             border: 1px solid #333;
         }
+        
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .btn-spd {
+            padding: 4px 8px;
+            font-size: 0.8em;
+            margin: 0;
+            background: #222;
+            border: 1px solid #444;
+            color: #888;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-spd.active {
+            background: var(--accent);
+            border-color: #2e7d32;
+            color: #000;
+        }
+
         .stats-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -122,7 +174,7 @@
         
         #global-tooltip {
             display: none;
-            position: fixed;
+            position: absolute;
             background: #111;
             border: 1px solid var(--gold);
             padding: 10px;
@@ -140,7 +192,7 @@
         .menu-item:hover { background-color: #444 !important; }
         
         .modal-bg {
-            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
             background: rgba(0,0,0,0.8); z-index: 200; justify-content: center; align-items: center;
         }
         .modal-content {
@@ -187,7 +239,14 @@
 
     <div id="ui-panel">
         <div class="card">
-            <h2 style="margin-top:0">Status</h2>
+            <div class="header-row">
+                <h2 style="margin:0; color: #fff; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">Status</h2>
+                <div style="display: flex; gap: 4px;">
+                    <button id="spd-1" class="btn-spd active" onclick="setSpeed(1)">1x ⏩</button>
+                    <button id="spd-2" class="btn-spd" onclick="setSpeed(2)">2x ⏩</button>
+                    <button id="spd-3" class="btn-spd" onclick="setSpeed(3)">3x ⏩</button>
+                </div>
+            </div>
             <div class="stats-grid">
                 <div class="stat-box lives"><div class="stat-label">Lives</div><div class="stat-value" style="color:var(--danger)" id="ui-lives">50</div></div>
                 <div class="stat-box gold"><div class="stat-label">Gold</div><div class="stat-value" style="color:var(--gold)" id="ui-gold">30</div></div>
@@ -239,10 +298,19 @@
     </div>
 
 <script>
-/** * TOWER DEFENSE PROTOTYPE ENGINE - v16.1 (Insta-Craft Visual Bug Fix) */
+/** * TOWER DEFENSE PROTOTYPE ENGINE - v18.0 (32x32, Game Speed, Gradient Guidelines) */
 
 const COLS = 32, ROWS = 32, CELL_SIZE = 32, CANVAS_SIZE = COLS * CELL_SIZE;
 const STATES = { BUILD_PLACE: 0, BUILD_SELECT: 1, BUILD_COMBINE: 2, WAVE: 3, GAME_OVER: 4, SWAPPING: 5 };
+
+let gameSpeed = 1;
+window.setSpeed = function(spd) {
+    gameSpeed = spd;
+    document.getElementById('spd-1').classList.remove('active');
+    document.getElementById('spd-2').classList.remove('active');
+    document.getElementById('spd-3').classList.remove('active');
+    document.getElementById('spd-' + spd).classList.add('active');
+}
 
 let currentMaxSpawns = 5;
 let zaWarudoUnlocked = false, midasActive = false, expActive = false;
@@ -258,7 +326,6 @@ let frames = 0, waveEnemiesToSpawn = 0;
 let waveEnemyQueue = [], bonusEnemies = 0, leakedThisWave = false;
 let currentShop = [], shopBought = [false, false, false, false];
 let floatingTexts = [];
-let arrowTrail = [];
 let waveClearTimer = 0;
 let waveClearText = "";
 
@@ -392,13 +459,22 @@ const btnUplevel = document.getElementById('btn-uplevel');
 const btnStartWave = document.getElementById('btn-startwave');
 
 function populateModals() {
-    let elHtml = `<h3 style="border-bottom: 2px solid #555; padding-bottom: 5px; color: var(--gold);">Base Elements</h3>`;
-    elHtml += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 20px;">`;
+    let elHtml = `<h3 style="border-bottom: 2px solid #555; padding-bottom: 8px; color: var(--gold);">Base Elements</h3>`;
+    elHtml += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-bottom: 25px;">`;
     for (let key in ELEMENTS) {
         let e = ELEMENTS[key];
-        elHtml += `<div style="background: #222; padding: 10px; border-radius: 6px; border-left: 4px solid ${e.color};">
-            <span class="color-dot" style="background:${e.color}"></span><strong style="color:${e.color}">${e.name}</strong><br>
-            <span style="font-size:0.85em; color:#aaa;">Type: ${e.type} | SPL: ${e.splash||0} | BaseDMG: ${e.damage}${e.seeInvis ? ' | <span style="color:#D3D3D3">Aura: True Sight</span>' : ''}</span>
+        elHtml += `<div style="background: #1a1a1a; padding: 12px; border-radius: 8px; border-left: 5px solid ${e.color}; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+            <div style="display:flex; align-items:center; margin-bottom:6px;">
+                <span class="color-dot" style="background:${e.color}; width:14px; height:14px;"></span>
+                <strong style="color:${e.color}; font-size:1.1em;">${e.name}</strong>
+            </div>
+            <div style="font-size:0.85em; color:#bbb; line-height: 1.4;">
+                <div><strong>Type:</strong> ${e.type}</div>
+                <div><strong>Base DMG:</strong> ${e.damage}</div>
+                <div><strong>Range:</strong> ${e.range}</div>
+                ${e.splash ? `<div><strong>Splash:</strong> ${e.splash}</div>` : ''}
+                ${e.name === 'Wind' ? `<div style="color:var(--gold); margin-top:4px;">Aura: Grants True Sight</div>` : ''}
+            </div>
         </div>`;
     }
     elHtml += `</div>`;
@@ -409,7 +485,7 @@ function populateModals() {
         if (!seenNames.has(r.name)) { seenNames.add(r.name); uniqueRecipes.push(r); }
     }
     
-    elHtml += `<h3 style="border-bottom: 2px solid #555; padding-bottom: 5px; color: var(--gold);">Tower Combinations (${uniqueRecipes.length} Unique)</h3>`;
+    elHtml += `<h3 style="border-bottom: 2px solid #555; padding-bottom: 8px; color: var(--gold);">Tower Combinations (${uniqueRecipes.length} Unique)</h3>`;
     elHtml += `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px;">`;
     for (let r of uniqueRecipes) {
         let reqs = [];
@@ -427,6 +503,27 @@ function populateModals() {
     }
     elHtml += `</div>`;
     document.getElementById('elements-modal-content').innerHTML = elHtml;
+    
+    let waveHtml = `
+        <h3>Wave Scaling</h3>
+        <p>Every wave starts with 10 base enemies. Flawless wave increases count by 1. Leak reduces by 1.</p>
+        <p>Enemies gain Base Armor equal to <strong>Wave Number * 2</strong>.</p>
+        <h3>Enemy Types & Buffs</h3>
+        <ul style="padding-left: 20px; line-height:1.6;">
+            <li><strong style="color:#00ffff">SHIELD:</strong> Starts with 50% extra HP as a shield.</li>
+            <li><strong style="color:#00ff00">REGEN:</strong> Passively heals 5% max HP per second.</li>
+            <li><strong style="color:#ffffff">DASH:</strong> Gains massive speed boost for 1 second when hit.</li>
+            <li><strong style="color:#ff00ff">IMMUNE:</strong> Immune to Slow/Freeze. Has 50% less Base Armor.</li>
+            <li><strong style="color:#ff8c00">DISARM AURA:</strong> Disables towers within 3 squares range.</li>
+            <li><strong style="color:#1e90ff">SLOW AURA:</strong> Reduces ASPD of towers within 3 squares.</li>
+            <li><strong style="color:#aaaaaa">PHASING:</strong> Temporarily invincible for 2s every 5s, moves 50% slower while active.</li>
+            <li><strong style="color:#2196F3">JUMPER:</strong> Jumps 2-4 squares ahead when HP drops by 20%.</li>
+            <li><strong style="color:#87CEFA">FLYING:</strong> Spawns only after wave 5. Targeted by Air/Hybrid only.</li>
+            <li><strong style="color:#aaa">INVISIBLE:</strong> Appears on Wave 7, 14. Requires True Sight.</li>
+            <li><strong style="color:#ff00ff">BOSS:</strong> Appears every 10 waves. Huge HP, slow speed.</li>
+        </ul>
+    `;
+    document.getElementById('waves-modal-content').innerHTML = waveHtml;
 }
 populateModals();
 
@@ -940,7 +1037,14 @@ function processCombine(baseTower, recipe) {
 
 function processTempCombine(selectedIndex, recipe) {
     let baseSpawn = unrevealedSpawns[selectedIndex];
-    
+    let consumed = [], nBase = { ...recipe.reqBase };
+    for (let req in nBase) {
+        for (let i = 0; i < nBase[req]; i++) {
+            let foundIdx = unrevealedSpawns.findIndex((s, idx) => !consumed.includes(idx) && `${s.element.name}_${s.tier}` === req);
+            consumed.push(foundIdx);
+        }
+    }
+
     let newTower = { x: baseSpawn.x, y: baseSpawn.y, element: baseSpawn.element, tier: baseSpawn.tier, cooldown: 0, isCombo: false, buffs: { damage: 0, speed: 0, crit: 0, range: 0, pierce: 0, trueSight: false, antiCC: false }, glowColor: null };
     newTower.isCombo = true; newTower.recipe = recipe; newTower.comboName = recipe.name; newTower.comboColor = recipe.color; newTower.tier += 2; 
     newTower.chain = recipe.chain || 0; newTower.freezeChc = recipe.freezeChc || 0; newTower.freezeDur = recipe.freezeDur || 0;
@@ -948,7 +1052,7 @@ function processTempCombine(selectedIndex, recipe) {
     calcTowerStats(newTower); towers.push(newTower); grid[baseSpawn.y][baseSpawn.x] = 'TOWER';
 
     for (let i = 0; i < unrevealedSpawns.length; i++) {
-        if (i !== selectedIndex) { 
+        if (!consumed.includes(i)) { 
             let s = unrevealedSpawns[i]; 
             stones.push({x: s.x, y: s.y}); 
             grid[s.y][s.x] = 'STONE'; 
@@ -963,7 +1067,7 @@ btnStartWave.addEventListener('click', () => { state = STATES.WAVE; waveSpawnTim
 function spawnEnemy() {
     let def = waveEnemyQueue.shift();
     let hpMult = Math.pow(1.25, waveNumber);
-    let baseHp = def.isBoss ? 500 : 20;
+    let baseHp = def.isBoss ? 500 : 20; 
     let spdMult = 1 + (waveNumber * 0.05);
     let baseSpd = def.isBoss ? 0.8 : 1.2;
     
@@ -972,7 +1076,7 @@ function spawnEnemy() {
         hp: baseHp * hpMult, maxHp: baseHp * hpMult, speed: baseSpd * spdMult,
         type: (Math.random() > 0.7 && !def.isBoss && !def.isInvis && waveNumber > 5) ? 'AIR' : 'GRND',
         isBoss: def.isBoss, invisible: def.isInvis, slowTimer: 0, burnTimer: 0, freezeTimer: 0, freezeCount: 0, poisonTimer: 0, armorDebuff: 0, stunTimer: 0, buffs: [],
-        armor: waveNumber * 2 
+        armor: Math.floor(waveNumber * 2) 
     };
 
     if (def.buff) {
@@ -1011,7 +1115,14 @@ function damageEnemy(e, amt, pTower, isCrit = false) {
 
 canvas.addEventListener('click', (e) => {
     const rect = canvas.getBoundingClientRect();
-    const gridX = Math.floor((e.clientX - rect.left) / CELL_SIZE), gridY = Math.floor((e.clientY - rect.top) / CELL_SIZE);
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const clickX = (e.clientX - rect.left) * scaleX;
+    const clickY = (e.clientY - rect.top) * scaleY;
+
+    const gridX = Math.floor(clickX / CELL_SIZE);
+    const gridY = Math.floor(clickY / CELL_SIZE);
+    
     let clickedStone = stones.find(s => s.x === gridX && s.y === gridY), clickedTower = towers.find(t => t.x === gridX && t.y === gridY);
     let clickedSpawnIndex = unrevealedSpawns.findIndex(s => s.x === gridX && s.y === gridY);
 
@@ -1086,180 +1197,183 @@ function drawStonePyramid(x, y) {
 function createParticles(x, y, color) { for (let i=0; i<10; i++) particles.push({ x: x, y: y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, life: 20+Math.random()*10, color: color }); }
 
 function gameLoop() {
-    frames++;
-    if (state === STATES.WAVE) {
-        if (waveEnemiesToSpawn > 0 && frames % 30 === 0) { spawnEnemy(); waveEnemiesToSpawn--; updateUI(); }
+    for (let step = 0; step < gameSpeed; step++) {
+        frames++;
+        if (state === STATES.WAVE) {
+            if (waveEnemiesToSpawn > 0 && frames % 30 === 0) { spawnEnemy(); waveEnemiesToSpawn--; updateUI(); }
 
-        for (let i = enemies.length - 1; i >= 0; i--) {
-            let e = enemies[i];
-            e.armorDebuff = 0; e.slowAuraDebuff = 0;
-        }
-
-        // Pass 3: Tower Auras on Enemies
-        for (let t of towers) {
-            if (t.isCombo && t.recipe) {
-                let rPx = (t.range + (t.buffs.permRng||0)) * CELL_SIZE;
-                let rt = t.recipe.auraTarget;
-                if (rt === 'PIERCE_ENEMY' || rt === 'DARK_OMNI') for (let e of enemies) if (Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) e.armorDebuff += (rt === 'DARK_OMNI' ? 30 : t.recipe.auraValue);
-                if (rt === 'SLOW_ENEMY' || rt === 'DARK_OMNI') for (let e of enemies) if (Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) e.slowAuraDebuff += (rt === 'DARK_OMNI' ? 0.4 : t.recipe.auraValue);
-            }
-        }
-
-        for (let i = enemies.length - 1; i >= 0; i--) {
-            let e = enemies[i], currentSpeed = e.speed;
-            
-            if (e.zaWarudoTimer > 0) { currentSpeed *= 0.2; e.zaWarudoTimer--; }
-            if (e.buffs.includes('PHASING')) {
-                if (e.phaseTimer > 0) { e.phaseTimer--; currentSpeed *= 0.5; if (e.phaseTimer <= 0) e.phaseCooldown = 180; } 
-                else { if (e.phaseCooldown > 0) e.phaseCooldown--; else e.phaseTimer = 120; }
-            }
-            if (e.stunTimer > 0) { currentSpeed = 0; e.stunTimer--; }
-            if (e.freezeTimer > 0) { currentSpeed = 0; e.freezeTimer--; } else if (e.slowTimer > 0) { currentSpeed *= 0.6; e.slowTimer--; }
-            if (e.slowAuraDebuff > 0) { currentSpeed *= Math.max(0.1, 1 - e.slowAuraDebuff); }
-            if (e.burnTimer > 0) { if (frames % 30 === 0) damageEnemy(e, e.maxHp * 0.02 + 5, null); e.burnTimer--; }
-            if (e.poisonTimer > 0) { if (frames % 30 === 0) damageEnemy(e, e.poisonDmg, null); e.poisonTimer--; }
-            if (e.buffs.includes('REGEN') && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + (e.maxHp * 0.05)/60);
-            if (e.buffs.includes('DASH') && e.dashTimer > 0) { currentSpeed *= 1.5; e.dashTimer--; }
-
-            if (e.pathIndex < cachedPath.length - 1) {
-                let target = cachedPath[e.pathIndex + 1], tx = target.x * CELL_SIZE + CELL_SIZE/2, ty = target.y * CELL_SIZE + CELL_SIZE/2;
-                let dx = tx - e.x, dy = ty - e.y, dist = Math.hypot(dx, dy);
-                if (dist < currentSpeed) { e.x = tx; e.y = ty; e.pathIndex++; } else { e.x += (dx / dist) * currentSpeed; e.y += (dy / dist) * currentSpeed; }
-            } else {
-                lives--; e.dead = true; leakedThisWave = true;
-                if (lives <= 0) { state = STATES.GAME_OVER; updateUI(); }
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i];
+                e.armorDebuff = 0; e.slowAuraDebuff = 0;
             }
 
-            if (e.buffs.includes('JUMPER') && !e.dead) {
-                if (e.hp / e.maxHp <= e.lastJumpThreshold && e.lastJumpThreshold > 0) {
-                    e.lastJumpThreshold -= 0.2;
-                    e.pathIndex += Math.floor(Math.random() * 3) + 2; 
-                    if (e.pathIndex >= cachedPath.length - 1) e.pathIndex = cachedPath.length - 2;
-                    let target = cachedPath[e.pathIndex];
-                    createParticles(e.x, e.y, '#2196F3'); 
-                    e.x = target.x * CELL_SIZE + CELL_SIZE/2; e.y = target.y * CELL_SIZE + CELL_SIZE/2;
-                    createParticles(e.x, e.y, '#2196F3'); 
+            // Pass 3: Tower Auras on Enemies
+            for (let t of towers) {
+                if (t.isCombo && t.recipe) {
+                    let rPx = (t.range + (t.buffs.permRng||0)) * CELL_SIZE;
+                    let rt = t.recipe.auraTarget;
+                    if (rt === 'PIERCE_ENEMY' || rt === 'DARK_OMNI') for (let e of enemies) if (Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) e.armorDebuff += (rt === 'DARK_OMNI' ? 30 : t.recipe.auraValue);
+                    if (rt === 'SLOW_ENEMY' || rt === 'DARK_OMNI') for (let e of enemies) if (Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) e.slowAuraDebuff += (rt === 'DARK_OMNI' ? 0.4 : t.recipe.auraValue);
                 }
             }
-        }
-        enemies = enemies.filter(e => !e.dead);
 
-        for (let t of towers) { t.buffs = { damage: 0, speed: 0, crit: 0, range: 0, pierce: 0, trueSight: false, antiCC: false }; t.enemyDebuffs = { disarmed: false, spdReduction: 0 }; }
-        
-        for (let t of towers) {
-            let rPx = ((t.range + (t.buffs.permRng||0)) * CELL_SIZE);
-            if (t.seeInvisible) { for (let other of towers) if (Math.hypot((other.x - t.x)*CELL_SIZE, (other.y - t.y)*CELL_SIZE) <= rPx) other.buffs.trueSight = true; t.buffs.trueSight = true; }
-            if (t.isCombo && t.recipe && t.recipe.type === 'SUPPORT') {
-                for (let other of towers) {
-                    if (t === other) continue;
-                    if (Math.hypot((other.x - t.x)*CELL_SIZE, (other.y - t.y)*CELL_SIZE) <= rPx) {
-                        let rt = t.recipe.auraTarget; let rv = t.recipe.auraValue;
-                        if (rt === 'SPEED') other.buffs.speed += rv; if (rt === 'DAMAGE') other.buffs.damage += rv;
-                        if (rt === 'CRIT') other.buffs.crit += rv; if (rt === 'RANGE') other.buffs.range += rv;
-                        if (rt === 'PIERCE') other.buffs.pierce += rv; if (rt === 'TRUE_SIGHT') other.buffs.trueSight = true;
-                        if (rt === 'ANTI_CC' || rt === 'DARK_OMNI') other.buffs.antiCC = true;
-                        if (rt === 'OMNI') { other.buffs.antiCC = true; other.buffs.trueSight = true; other.buffs.speed += 0.8; other.buffs.damage += 0.8; other.buffs.crit += 0.3;  other.buffs.pierce += 0.3; }
-                        if (rt === 'BURN' && frames % 30 === 0) for (let e of enemies) if (Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) damageEnemy(e, rv, t);
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i], currentSpeed = e.speed;
+                
+                if (e.zaWarudoTimer > 0) { currentSpeed *= 0.2; e.zaWarudoTimer--; }
+                if (e.buffs.includes('PHASING')) {
+                    if (e.phaseTimer > 0) { e.phaseTimer--; currentSpeed *= 0.5; if (e.phaseTimer <= 0) e.phaseCooldown = 180; } 
+                    else { if (e.phaseCooldown > 0) e.phaseCooldown--; else e.phaseTimer = 120; }
+                }
+                if (e.stunTimer > 0) { currentSpeed = 0; e.stunTimer--; }
+                if (e.freezeTimer > 0) { currentSpeed = 0; e.freezeTimer--; } else if (e.slowTimer > 0) { currentSpeed *= 0.6; e.slowTimer--; }
+                if (e.slowAuraDebuff > 0) { currentSpeed *= Math.max(0.1, 1 - e.slowAuraDebuff); }
+                if (e.burnTimer > 0) { if (frames % 30 === 0) damageEnemy(e, e.maxHp * 0.02 + 5, null); e.burnTimer--; }
+                if (e.poisonTimer > 0) { if (frames % 30 === 0) damageEnemy(e, e.poisonDmg, null); e.poisonTimer--; }
+                if (e.buffs.includes('REGEN') && e.hp < e.maxHp) e.hp = Math.min(e.maxHp, e.hp + (e.maxHp * 0.05)/60);
+                if (e.buffs.includes('DASH') && e.dashTimer > 0) { currentSpeed *= 1.5; e.dashTimer--; }
+
+                if (e.pathIndex < cachedPath.length - 1) {
+                    let target = cachedPath[e.pathIndex + 1], tx = target.x * CELL_SIZE + CELL_SIZE/2, ty = target.y * CELL_SIZE + CELL_SIZE/2;
+                    let dx = tx - e.x, dy = ty - e.y, dist = Math.hypot(dx, dy);
+                    if (dist < currentSpeed) { e.x = tx; e.y = ty; e.pathIndex++; } else { e.x += (dx / dist) * currentSpeed; e.y += (dy / dist) * currentSpeed; }
+                } else {
+                    lives--; e.dead = true; leakedThisWave = true;
+                    if (lives <= 0) { state = STATES.GAME_OVER; updateUI(); }
+                }
+
+                if (e.buffs.includes('JUMPER') && !e.dead) {
+                    if (e.hp / e.maxHp <= e.lastJumpThreshold && e.lastJumpThreshold > 0) {
+                        e.lastJumpThreshold -= 0.2;
+                        e.pathIndex += Math.floor(Math.random() * 3) + 2; 
+                        if (e.pathIndex >= cachedPath.length - 1) e.pathIndex = cachedPath.length - 2;
+                        let target = cachedPath[e.pathIndex];
+                        createParticles(e.x, e.y, '#2196F3'); 
+                        e.x = target.x * CELL_SIZE + CELL_SIZE/2; e.y = target.y * CELL_SIZE + CELL_SIZE/2;
+                        createParticles(e.x, e.y, '#2196F3'); 
                     }
                 }
             }
-        }
+            enemies = enemies.filter(e => !e.dead);
 
-        for (let e of enemies) {
-            if (e.buffs.includes('DISARM_AURA')) { let rPx = 3 * CELL_SIZE; for (let t of towers) if (!t.buffs.antiCC && Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) t.enemyDebuffs.disarmed = true; }
-            if (e.buffs.includes('SLOW_AURA')) { let rPx = 3 * CELL_SIZE; for (let t of towers) if (!t.buffs.antiCC && Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) t.enemyDebuffs.spdReduction = Math.min(0.8, waveNumber * 0.02); }
-        }
-
-        for (let t of towers) {
-            if (t.recipe && (t.recipe.auraTarget === 'BURN' || t.recipe.auraTarget === 'PIERCE_ENEMY' || t.recipe.auraTarget === 'SLOW_ENEMY' || t.recipe.auraTarget === 'DARK_OMNI')) continue; 
-            if (t.enemyDebuffs.disarmed) continue;
+            for (let t of towers) { t.buffs = { damage: 0, speed: 0, crit: 0, range: 0, pierce: 0, trueSight: false, antiCC: false }; t.enemyDebuffs = { disarmed: false, spdReduction: 0 }; }
             
-            if (t.cooldown > 0) t.cooldown--;
-            else {
-                let px = t.x * CELL_SIZE + CELL_SIZE/2, py = t.y * CELL_SIZE + CELL_SIZE/2, rangePx = (t.range + (t.buffs.permRng||0) + t.buffs.range) * CELL_SIZE;
-                let targets = []; let maxTargets = t.multiTarget || 1;
-                for (let e of enemies) {
-                    if (e.invisible && !t.seeInvisible && !t.buffs.trueSight) continue;
-                    if (t.element.type === 'GRND' && e.type === 'AIR') continue;
-                    if (t.element.type === 'AIR' && e.type === 'GRND') continue;
-                    if (Math.hypot(e.x - px, e.y - py) <= rangePx) { targets.push(e); if (targets.length >= maxTargets) break; }
-                }
-
-                if (targets.length > 0) {
-                    let effSpeed = t.baseSpeed / (1 + t.buffs.speed + (t.buffs.permSpd||0));
-                    effSpeed /= (1 - t.enemyDebuffs.spdReduction);
-                    for (let tgt of targets) projectiles.push({ x: px, y: py, target: tgt, tower: t, speed: 10, chain: t.chain, hitList: [] });
-                    t.cooldown = Math.max(5, effSpeed); 
-                }
-            }
-        }
-
-        for (let i = projectiles.length - 1; i >= 0; i--) {
-            let p = projectiles[i];
-            if (p.target.dead) { projectiles.splice(i, 1); continue; }
-            
-            let dx = p.target.x - p.x, dy = p.target.y - p.y, dist = Math.hypot(dx, dy);
-            if (dist < p.speed) {
-                let dmg = p.tower.baseDamage * (1 + p.tower.buffs.damage + (p.tower.buffs.permDmg||0));
-                let critMult = 1.5 + (p.tower.critMultBonus || 0);
-                let isCrit = Math.random() < (p.tower.baseCrit + p.tower.buffs.crit + (p.tower.buffs.permCrit||0));
-                if (isCrit) dmg *= critMult;
-
-                if (p.tower.splash) {
-                    let sRad = p.tower.splash * CELL_SIZE;
-                    for (let e of enemies) {
-                        if (Math.hypot(e.x - p.target.x, e.y - p.target.y) < sRad) {
-                            damageEnemy(e, dmg * 0.5, p.tower, isCrit);
-                            if (p.tower.slow && !e.buffs.includes('IMMUNE')) e.slowTimer = 60 * p.tower.tier;
+            for (let t of towers) {
+                let rPx = ((t.range + (t.buffs.permRng||0)) * CELL_SIZE);
+                if (t.seeInvisible) { for (let other of towers) if (Math.hypot((other.x - t.x)*CELL_SIZE, (other.y - t.y)*CELL_SIZE) <= rPx) other.buffs.trueSight = true; t.buffs.trueSight = true; }
+                if (t.isCombo && t.recipe && t.recipe.type === 'SUPPORT') {
+                    for (let other of towers) {
+                        if (t === other) continue;
+                        if (Math.hypot((other.x - t.x)*CELL_SIZE, (other.y - t.y)*CELL_SIZE) <= rPx) {
+                            let rt = t.recipe.auraTarget; let rv = t.recipe.auraValue;
+                            if (rt === 'SPEED') other.buffs.speed += rv; if (rt === 'DAMAGE') other.buffs.damage += rv;
+                            if (rt === 'CRIT') other.buffs.crit += rv; if (rt === 'RANGE') other.buffs.range += rv;
+                            if (rt === 'PIERCE') other.buffs.pierce += rv; if (rt === 'TRUE_SIGHT') other.buffs.trueSight = true;
+                            if (rt === 'ANTI_CC' || rt === 'DARK_OMNI') other.buffs.antiCC = true;
+                            if (rt === 'OMNI') { other.buffs.antiCC = true; other.buffs.trueSight = true; other.buffs.speed += 0.8; other.buffs.damage += 0.8; other.buffs.crit += 0.3;  other.buffs.pierce += 0.3; }
+                            if (rt === 'BURN' && frames % 30 === 0) for (let e of enemies) if (Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) damageEnemy(e, rv, t);
                         }
                     }
                 }
+            }
+
+            for (let e of enemies) {
+                if (e.buffs.includes('DISARM_AURA')) { let rPx = 3 * CELL_SIZE; for (let t of towers) if (!t.buffs.antiCC && Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) t.enemyDebuffs.disarmed = true; }
+                if (e.buffs.includes('SLOW_AURA')) { let rPx = 3 * CELL_SIZE; for (let t of towers) if (!t.buffs.antiCC && Math.hypot(e.x - (t.x*CELL_SIZE+CELL_SIZE/2), e.y - (t.y*CELL_SIZE+CELL_SIZE/2)) <= rPx) t.enemyDebuffs.spdReduction = Math.min(0.8, waveNumber * 0.02); }
+            }
+
+            for (let t of towers) {
+                if (t.recipe && (t.recipe.auraTarget === 'BURN' || t.recipe.auraTarget === 'PIERCE_ENEMY' || t.recipe.auraTarget === 'SLOW_ENEMY' || t.recipe.auraTarget === 'DARK_OMNI')) continue; 
+                if (t.enemyDebuffs.disarmed) continue;
                 
-                damageEnemy(p.target, dmg, p.tower, isCrit);
-                if (p.tower.burn) p.target.burnTimer = 60 * p.tower.tier;
-                if (p.tower.poison) { p.target.poisonTimer = 60 * p.tower.tier; p.target.poisonDmg = p.tower.poison; }
-                if (p.tower.slow && !p.target.buffs.includes('IMMUNE')) p.target.slowTimer = 60 * p.tower.tier;
-                if (p.tower.stunChc && Math.random() < p.tower.stunChc && !p.target.buffs.includes('IMMUNE')) p.target.stunTimer = p.tower.stunDur;
-                
-                if (p.tower.freezeChc && Math.random() < p.tower.freezeChc && !p.target.buffs.includes('IMMUNE') && p.target.freezeCount < 5) { 
-                    p.target.freezeTimer = p.tower.freezeDur; p.target.freezeCount++; 
+                if (t.cooldown > 0) t.cooldown--;
+                else {
+                    let px = t.x * CELL_SIZE + CELL_SIZE/2, py = t.y * CELL_SIZE + CELL_SIZE/2, rangePx = (t.range + (t.buffs.permRng||0) + t.buffs.range) * CELL_SIZE;
+                    let targets = []; let maxTargets = t.multiTarget || 1;
+                    for (let e of enemies) {
+                        if (e.invisible && !t.seeInvisible && !t.buffs.trueSight) continue;
+                        if (t.element.type === 'GRND' && e.type === 'AIR') continue;
+                        if (t.element.type === 'AIR' && e.type === 'GRND') continue;
+                        if (Math.hypot(e.x - px, e.y - py) <= rangePx) { targets.push(e); if (targets.length >= maxTargets) break; }
+                    }
+
+                    if (targets.length > 0) {
+                        let effSpeed = t.baseSpeed / (1 + t.buffs.speed + (t.buffs.permSpd||0));
+                        effSpeed /= (1 - t.enemyDebuffs.spdReduction);
+                        for (let tgt of targets) projectiles.push({ x: px, y: py, target: tgt, tower: t, speed: 10, chain: t.chain, hitList: [] });
+                        t.cooldown = Math.max(5, effSpeed); 
+                    }
                 }
+            }
+
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                let p = projectiles[i];
+                if (p.target.dead) { projectiles.splice(i, 1); continue; }
                 
-                createParticles(p.target.x, p.target.y, isCrit ? '#ffffff' : (p.tower.isCombo ? p.tower.comboColor : p.tower.element.color));
-                
-                if (p.chain > 0) {
-                    p.hitList.push(p.target);
-                    let nextTarget = enemies.find(en => en !== p.target && !en.dead && Math.hypot(en.x - p.target.x, en.y - p.target.y) < CELL_SIZE*4 && !p.hitList.includes(en) && (!en.invisible || p.tower.seeInvisible || p.tower.buffs.trueSight));
-                    if (nextTarget) { p.target = nextTarget; p.chain--; p.tower.baseDamage *= 0.8; continue; }
-                }
-                projectiles.splice(i, 1);
-            } else { p.x += (dx / dist) * p.speed; p.y += (dy / dist) * p.speed; }
+                let dx = p.target.x - p.x, dy = p.target.y - p.y, dist = Math.hypot(dx, dy);
+                if (dist < p.speed) {
+                    let dmg = p.tower.baseDamage * (1 + p.tower.buffs.damage + (p.tower.buffs.permDmg||0));
+                    let critMult = 1.5 + (p.tower.critMultBonus || 0);
+                    let isCrit = Math.random() < (p.tower.baseCrit + p.tower.buffs.crit + (p.tower.buffs.permCrit||0));
+                    if (isCrit) dmg *= critMult;
+
+                    if (p.tower.splash) {
+                        let sRad = p.tower.splash * CELL_SIZE;
+                        for (let e of enemies) {
+                            if (Math.hypot(e.x - p.target.x, e.y - p.target.y) < sRad) {
+                                damageEnemy(e, dmg * 0.5, p.tower, isCrit);
+                                if (p.tower.slow && !e.buffs.includes('IMMUNE')) e.slowTimer = 60 * p.tower.tier;
+                            }
+                        }
+                    }
+                    
+                    damageEnemy(p.target, dmg, p.tower, isCrit);
+                    if (p.tower.burn) p.target.burnTimer = 60 * p.tower.tier;
+                    if (p.tower.poison) { p.target.poisonTimer = 60 * p.tower.tier; p.target.poisonDmg = p.tower.poison; }
+                    if (p.tower.slow && !p.target.buffs.includes('IMMUNE')) p.target.slowTimer = 60 * p.tower.tier;
+                    if (p.tower.stunChc && Math.random() < p.tower.stunChc && !p.target.buffs.includes('IMMUNE')) p.target.stunTimer = p.tower.stunDur;
+                    
+                    if (p.tower.freezeChc && Math.random() < p.tower.freezeChc && !p.target.buffs.includes('IMMUNE') && p.target.freezeCount < 5) { 
+                        p.target.freezeTimer = p.tower.freezeDur; p.target.freezeCount++; 
+                    }
+                    
+                    createParticles(p.target.x, p.target.y, isCrit ? '#ffffff' : (p.tower.isCombo ? p.tower.comboColor : p.tower.element.color));
+                    
+                    if (p.chain > 0) {
+                        p.hitList.push(p.target);
+                        let nextTarget = enemies.find(en => en !== p.target && !en.dead && Math.hypot(en.x - p.target.x, en.y - p.target.y) < CELL_SIZE*4 && !p.hitList.includes(en) && (!en.invisible || p.tower.seeInvisible || p.tower.buffs.trueSight));
+                        if (nextTarget) { p.target = nextTarget; p.chain--; p.tower.baseDamage *= 0.8; continue; }
+                    }
+                    projectiles.splice(i, 1);
+                } else { p.x += (dx / dist) * p.speed; p.y += (dy / dist) * p.speed; }
+            }
+
+            if (waveEnemiesToSpawn === 0 && enemies.length === 0) {
+                waveClearText = "WAVE " + waveNumber + " CLEARED!";
+                waveClearTimer = 120;
+                exp += 2 * (expActive ? 2 : 1); waveNumber++;
+                if (waveNumber % 5 === 1) refreshShop(); 
+                if (!leakedThisWave) bonusEnemies++; else bonusEnemies = Math.max(0, bonusEnemies - 1);
+                currentMaxSpawns = 5; midasActive = false; expActive = false;
+                precalculateWave(); state = STATES.BUILD_PLACE;
+                selectedTower = null; selectedStone = null; projectiles = []; particles = []; floatingTexts = []; updateUI();
+            }
         }
 
+        // Non-wave particles & timers
+        for(let t of towers) {
+            if (t.isCombo && (t.comboColor === '#FFFFCC' || t.comboColor === '#4B0082')) {
+                if (Math.random() < 0.1) { particles.push({ x: t.x * CELL_SIZE + CELL_SIZE/2 + (Math.random()-0.5)*20, y: t.y * CELL_SIZE + CELL_SIZE/2 + (Math.random()-0.5)*20, vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2 - 1, life: 15, color: '#FFD700' }); }
+            }
+        }
         for (let i = particles.length - 1; i >= 0; i--) { let pt = particles[i]; pt.x += pt.vx; pt.y += pt.vy; pt.life--; if (pt.life <= 0) particles.splice(i, 1); }
         for (let i = floatingTexts.length - 1; i >= 0; i--) { let ft = floatingTexts[i]; ft.y -= 1; ft.life--; if (ft.life <= 0) floatingTexts.splice(i, 1); }
-
-        if (waveEnemiesToSpawn === 0 && enemies.length === 0 && state === STATES.WAVE) {
-            waveClearText = "WAVE " + waveNumber + " CLEARED!";
-            waveClearTimer = 120;
-            exp += 2 * (expActive ? 2 : 1); waveNumber++;
-            if (waveNumber % 5 === 1) refreshShop(); 
-            if (!leakedThisWave) bonusEnemies++; else bonusEnemies = Math.max(0, bonusEnemies - 1);
-            currentMaxSpawns = 5; midasActive = false; expActive = false; // Reset buffs
-            precalculateWave(); state = STATES.BUILD_PLACE;
-            selectedTower = null; selectedStone = null; projectiles = []; particles = []; floatingTexts = []; updateUI();
-        }
+        if (waveClearTimer > 0) waveClearTimer--;
     }
 
-    for(let t of towers) {
-        if (t.isCombo && (t.comboColor === '#FFFFCC' || t.comboColor === '#4B0082')) {
-            if (Math.random() < 0.1) { particles.push({ x: t.x * CELL_SIZE + CELL_SIZE/2 + (Math.random()-0.5)*20, y: t.y * CELL_SIZE + CELL_SIZE/2 + (Math.random()-0.5)*20, vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2 - 1, life: 15, color: '#FFD700' }); }
-        }
-    }
-
+    // DRAW PHASE
     ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     
-    // Faint grid
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)'; ctx.lineWidth = 1;
     ctx.beginPath();
     for(let i=0; i<=COLS; i++) { 
@@ -1284,29 +1398,28 @@ function gameLoop() {
         ctx.stroke();
 
         let pathLen = cachedPath.length - 1;
+        
+        ctx.lineWidth = CELL_SIZE * 0.4; 
+        ctx.lineCap = 'round'; 
+        ctx.lineJoin = 'round'; 
+        
+        for (let i = 0; i < pathLen; i++) {
+            let p1 = cachedPath[i], p2 = cachedPath[i+1];
+            let hue = 240 * (1 - (i / pathLen)); 
+            ctx.strokeStyle = `hsla(${hue}, 100%, 50%, 0.15)`;
+            ctx.beginPath();
+            ctx.moveTo(p1.x * CELL_SIZE + CELL_SIZE/2, p1.y * CELL_SIZE + CELL_SIZE/2);
+            ctx.lineTo(p2.x * CELL_SIZE + CELL_SIZE/2, p2.y * CELL_SIZE + CELL_SIZE/2);
+            ctx.stroke();
+        }
+
         if (pathLen > 0) {
             let framesPerCell = 2.5; let totalFrames = pathLen * framesPerCell; let currentFrame = frames % totalFrames; let progressCells = currentFrame / framesPerCell;
-            
-            if (currentFrame === 0 || progressCells < 0.1) arrowTrail = [];
             
             let i = Math.floor(progressCells);
             if (i < pathLen) {
                 let progress = progressCells - i; let p1 = cachedPath[i], p2 = cachedPath[i+1];
                 let cx = (p1.x + (p2.x - p1.x) * progress) * CELL_SIZE + CELL_SIZE/2; let cy = (p1.y + (p2.y - p1.y) * progress) * CELL_SIZE + CELL_SIZE/2; let angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-                
-                arrowTrail.push({x: cx, y: cy});
-                if (arrowTrail.length > 40) arrowTrail.shift();
-                
-                ctx.lineCap = 'round';
-                ctx.lineWidth = CELL_SIZE * 0.15;
-                for (let j = 0; j < arrowTrail.length - 1; j++) {
-                    ctx.strokeStyle = `rgba(255, 255, 255, ${0.5 * (j / arrowTrail.length)})`;
-                    ctx.beginPath();
-                    ctx.moveTo(arrowTrail[j].x, arrowTrail[j].y);
-                    ctx.lineTo(arrowTrail[j+1].x, arrowTrail[j+1].y);
-                    ctx.stroke();
-                }
-
                 ctx.save(); ctx.translate(cx, cy); ctx.rotate(angle);
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
                 ctx.beginPath(); ctx.moveTo(-10, -10); ctx.lineTo(12, 0); ctx.lineTo(-10, 10); ctx.fill(); ctx.restore();
@@ -1317,37 +1430,18 @@ function gameLoop() {
     WAYPOINTS.forEach((wp, idx) => { 
         let cx = wp.x * CELL_SIZE + CELL_SIZE/2;
         let cy = wp.y * CELL_SIZE + CELL_SIZE/2;
-
-        ctx.save();
-        ctx.translate(cx, cy);
-        
-        ctx.rotate(frames * 0.02);
-        ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([10, 10]);
-        ctx.beginPath(); ctx.arc(0, 0, CELL_SIZE * 0.4, 0, Math.PI * 2); ctx.stroke();
-        ctx.setLineDash([]);
-        
-        ctx.rotate(-frames * 0.05);
-        ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
-        ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
-        ctx.lineWidth = 1;
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(frames * 0.02);
+        ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)'; ctx.lineWidth = 2; ctx.setLineDash([10, 10]);
+        ctx.beginPath(); ctx.arc(0, 0, CELL_SIZE * 0.4, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+        ctx.rotate(-frames * 0.05); ctx.fillStyle = 'rgba(0, 255, 255, 0.15)'; ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)'; ctx.lineWidth = 1;
         ctx.beginPath();
         for(let k=0; k<6; k++) {
             let a = k * Math.PI / 3;
             if(k===0) ctx.moveTo(Math.cos(a)*CELL_SIZE*0.25, Math.sin(a)*CELL_SIZE*0.25);
             else ctx.lineTo(Math.cos(a)*CELL_SIZE*0.25, Math.sin(a)*CELL_SIZE*0.25);
         }
-        ctx.closePath();
-        ctx.fill(); ctx.stroke();
-        
-        ctx.restore();
-
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; 
-        ctx.font = 'bold 14px monospace'; 
-        ctx.textAlign = 'center'; 
-        ctx.textBaseline = 'middle';
-        ctx.fillText(idx + 1, cx, cy);
+        ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(idx + 1, cx, cy);
     });
 
     for (let s of stones) { drawStonePyramid(s.x, s.y); if (selectedStone === s || (state === STATES.SWAPPING && swapSource === s)) { ctx.strokeStyle = state === STATES.SWAPPING ? '#FFD700' : '#f44336'; ctx.lineWidth = 2; ctx.strokeRect(s.x*CELL_SIZE, s.y*CELL_SIZE, CELL_SIZE, CELL_SIZE); } }
@@ -1474,7 +1568,7 @@ function gameLoop() {
         
         ctx.save();
         ctx.translate(CANVAS_SIZE/2, CANVAS_SIZE/2);
-        let scale = 0.5 + (120 - waveClearTimer) * 0.0025; // 50% scale
+        let scale = 1.0 + (120 - waveClearTimer) * 0.005; // Base 1.0 for 1024x1024 screen
         ctx.scale(scale, scale);
         ctx.globalAlpha = Math.min(1, waveClearTimer / 30);
         ctx.font = 'bold 60px Arial';
@@ -1488,8 +1582,6 @@ function gameLoop() {
         ctx.fillStyle = '#FFD700';
         ctx.fillText(waveClearText, 0, 0);
         ctx.restore();
-        
-        waveClearTimer--;
     }
 
     if (state !== STATES.GAME_OVER) requestAnimationFrame(gameLoop);
