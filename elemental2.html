@@ -91,11 +91,16 @@
             border-radius: 4px;
             cursor: pointer;
             font-weight: bold;
+            transition: 0.2s;
         }
         .btn-spd.active {
             background: var(--accent);
             border-color: #2e7d32;
             color: #000;
+        }
+        .btn-spd:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
         }
 
         .stats-grid {
@@ -212,10 +217,10 @@
             <div style="width: 20px; height: 2px; background: white;"></div>
         </button>
         <div id="menu-dropdown" style="display: none; position: absolute; top: 50px; right: 0; background: var(--panel); border: 1px solid #444; border-radius: 4px; width: 160px; box-shadow: 0 5px 15px rgba(0,0,0,0.5);">
-            <button id="btn-restart" class="menu-item" style="border:none; border-bottom: 1px solid #444; margin:0; border-radius: 4px 4px 0 0; background: transparent; text-align: left; padding: 12px; width: 100%;">Restart Game</button>
+            <button id="btn-home" class="menu-item" style="border:none; border-bottom: 1px solid #444; margin:0; border-radius: 4px 4px 0 0; background: transparent; text-align: left; padding: 12px; width: 100%;">Back to Homepage</button>
+            <button id="btn-restart" class="menu-item" style="border:none; border-bottom: 1px solid #444; margin:0; border-radius: 0; background: transparent; text-align: left; padding: 12px; width: 100%;">Restart Game</button>
             <button id="btn-elements" class="menu-item" style="border:none; border-bottom: 1px solid #444; margin:0; border-radius: 0; background: transparent; text-align: left; padding: 12px; width: 100%;">Elements Info</button>
-            <button id="btn-waves" class="menu-item" style="border:none; border-bottom: 1px solid #444; margin:0; border-radius: 0; background: transparent; text-align: left; padding: 12px; width: 100%;">Waves Info</button>
-            <button class="menu-item" style="border:none; margin:0; border-radius: 0 0 4px 4px; background: transparent; text-align: left; padding: 12px; width: 100%; color: #aaa;">Settings (WIP)</button>
+            <button id="btn-waves" class="menu-item" style="border:none; margin:0; border-radius: 0 0 4px 4px; background: transparent; text-align: left; padding: 12px; width: 100%;">Waves Info</button>
         </div>
     </div>
 
@@ -243,8 +248,7 @@
                 <h2 style="margin:0; color: #fff; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);">Status</h2>
                 <div style="display: flex; gap: 4px;">
                     <button id="spd-1" class="btn-spd active" onclick="setSpeed(1)">1x ⏩</button>
-                    <button id="spd-2" class="btn-spd" onclick="setSpeed(2)">2x ⏩</button>
-                    <button id="spd-3" class="btn-spd" onclick="setSpeed(3)">3x ⏩</button>
+                    <button id="spd-3" class="btn-spd" onclick="setSpeed(3)" disabled>3x ⏩</button>
                 </div>
             </div>
             <div class="stats-grid">
@@ -298,16 +302,16 @@
     </div>
 
 <script>
-/** * TOWER DEFENSE PROTOTYPE ENGINE - v18.0 (32x32, Game Speed, Gradient Guidelines) */
+/** * TOWER DEFENSE PROTOTYPE ENGINE - v19.0 (32x32, Wave Clear Freeze, Fixes) */
 
 const COLS = 32, ROWS = 32, CELL_SIZE = 32, CANVAS_SIZE = COLS * CELL_SIZE;
-const STATES = { BUILD_PLACE: 0, BUILD_SELECT: 1, BUILD_COMBINE: 2, WAVE: 3, GAME_OVER: 4, SWAPPING: 5 };
+const STATES = { BUILD_PLACE: 0, BUILD_SELECT: 1, BUILD_COMBINE: 2, WAVE: 3, GAME_OVER: 4, SWAPPING: 5, WAVE_CLEAR: 6 };
 
 let gameSpeed = 1;
 window.setSpeed = function(spd) {
+    if (spd === 3 && document.getElementById('spd-3').disabled) return;
     gameSpeed = spd;
     document.getElementById('spd-1').classList.remove('active');
-    document.getElementById('spd-2').classList.remove('active');
     document.getElementById('spd-3').classList.remove('active');
     document.getElementById('spd-' + spd).classList.add('active');
 }
@@ -315,6 +319,7 @@ window.setSpeed = function(spd) {
 let currentMaxSpawns = 5;
 let zaWarudoUnlocked = false, midasActive = false, expActive = false;
 let preSwapState = null, swapSource = null;
+let waveFramesCounter = 0; // Tracks frames in real-time to unlock 3x speed
 
 let state = STATES.BUILD_PLACE;
 let builderLevel = 1, exp = 0, gold = 40, lives = 50, waveNumber = 1;
@@ -539,6 +544,7 @@ document.addEventListener('click', (e) => {
     }
 });
 
+document.getElementById('btn-home').addEventListener('click', () => { window.location.href = 'homepage.html'; });
 document.getElementById('btn-restart').addEventListener('click', () => { menuDropdown.style.display = 'none'; document.getElementById('restart-modal').style.display = 'flex'; });
 document.getElementById('btn-elements').addEventListener('click', () => { menuDropdown.style.display = 'none'; document.getElementById('elements-modal').style.display = 'flex'; });
 document.getElementById('btn-waves').addEventListener('click', () => { menuDropdown.style.display = 'none'; document.getElementById('waves-modal').style.display = 'flex'; });
@@ -549,14 +555,15 @@ document.getElementById('btn-restart-yes').addEventListener('click', () => {
     state = STATES.BUILD_PLACE; builderLevel = 1; exp = 0; gold = 40; lives = 50; waveNumber = 1;
     currentMaxSpawns = 5; zaWarudoUnlocked = false; swapSource = null; midasActive = false; expActive = false;
     grid = Array(ROWS).fill().map(() => Array(COLS).fill(null)); towers = []; stones = []; unrevealedSpawns = [];
-    enemies = []; projectiles = []; particles = []; floatingTexts = []; arrowTrail = []; waveClearTimer = 0;
+    enemies = []; projectiles = []; particles = []; floatingTexts = []; arrowTrail = []; waveClearTimer = 0; waveFramesCounter = 0;
     selectedSpawnIndex = -1; selectedTower = null; selectedStone = null;
     frames = 0; waveEnemiesToSpawn = 0; bonusEnemies = 0;
     precalculateWave(); refreshShop(); cachedPath = calculateFullPath(); updateUI();
+    setSpeed(1); document.getElementById('spd-3').disabled = true;
 });
 
 document.getElementById('btn-refresh-shop').addEventListener('click', () => {
-    if (gold >= 10 && state !== STATES.WAVE) { gold -= 10; refreshShop(); updateUI(); }
+    if (gold >= 10 && state !== STATES.WAVE && state !== STATES.WAVE_CLEAR) { gold -= 10; refreshShop(); updateUI(); }
 });
 
 function isExclusionZone(x, y) { return false; } 
@@ -738,6 +745,9 @@ function updateUI() {
     } else if (state === STATES.WAVE) {
         document.getElementById('phase-title').innerText = "Phase: Defense"; document.getElementById('phase-desc').innerText = `Enemies remaining: ${enemies.length + waveEnemiesToSpawn}`;
         btnStartWave.style.display = 'none';
+    } else if (state === STATES.WAVE_CLEAR) {
+        document.getElementById('phase-title').innerText = "Phase: Cleared!"; document.getElementById('phase-desc').innerText = `Preparing next wave...`;
+        btnStartWave.style.display = 'none'; sActions.style.display = 'none';
     } else if (state === STATES.SWAPPING) {
         document.getElementById('phase-title').innerText = "Phase: Swapping"; document.getElementById('phase-desc').innerText = "Select target to swap with, or click same to cancel.";
         btnStartWave.style.display = 'none'; sActions.style.display = 'none';
@@ -782,7 +792,7 @@ function updateUI() {
 
     let targetTower = null;
 
-    if (selectedStone && state !== STATES.WAVE && state !== STATES.SWAPPING) {
+    if (selectedStone && state !== STATES.WAVE && state !== STATES.WAVE_CLEAR && state !== STATES.SWAPPING) {
         sActions.style.display = 'block';
         sInfo.innerHTML = `<span class="color-dot" style="background:#555"></span> Stone`; dStats.innerHTML = `Obstacle Block`;
         let btnRem = document.createElement('button'); btnRem.className = 'btn-danger'; btnRem.innerText = 'Remove Stone (1 Gold)'; btnRem.disabled = gold < 1;
@@ -830,7 +840,7 @@ function updateUI() {
         sActions.style.display = 'block'; sInfo.innerText = "None Selected";
     }
 
-    if (targetTower && state !== STATES.SWAPPING) {
+    if (targetTower && state !== STATES.SWAPPING && state !== STATES.WAVE_CLEAR) {
         let recipeNodes = [];
 
         for (let r of RECIPES) {
@@ -948,7 +958,7 @@ function updateUI() {
         } else {
             btn.innerHTML = `<strong>${item.name}</strong><br><span style="font-size:0.8em">${item.desc}</span><br><span style="color:var(--gold)">${item.cost} Gold</span>`;
             let target = selectedTower || selectedStone;
-            let btnDisabled = gold < item.cost || state === STATES.WAVE || state === STATES.SWAPPING;
+            let btnDisabled = gold < item.cost || state === STATES.WAVE || state === STATES.WAVE_CLEAR || state === STATES.SWAPPING;
             
             if (item.type === 'TOWER') { if (!selectedTower || !towers.includes(selectedTower)) btnDisabled = true; } 
             else if (item.type === 'SWAP') { if (!target || selectedSpawnIndex >= 0) btnDisabled = true; }
@@ -971,7 +981,7 @@ function updateUI() {
         }
         sItems.appendChild(btn);
     });
-    document.getElementById('btn-refresh-shop').disabled = (gold < 10 || state === STATES.WAVE);
+    document.getElementById('btn-refresh-shop').disabled = (gold < 10 || state === STATES.WAVE || state === STATES.WAVE_CLEAR);
 }
 
 function rollElement() {
@@ -994,6 +1004,7 @@ function keepTowerIndex(index) {
         if (i !== index) { let s = unrevealedSpawns[i]; stones.push({x: s.x, y: s.y}); grid[s.y][s.x] = 'STONE'; }
     }
     unrevealedSpawns = []; selectedSpawnIndex = -1; cachedPath = calculateFullPath(); state = STATES.BUILD_COMBINE;
+    if (waveNumber % 3 === 1) refreshShop();
     updateUI();
 }
 
@@ -1052,7 +1063,7 @@ function processTempCombine(selectedIndex, recipe) {
     calcTowerStats(newTower); towers.push(newTower); grid[baseSpawn.y][baseSpawn.x] = 'TOWER';
 
     for (let i = 0; i < unrevealedSpawns.length; i++) {
-        if (!consumed.includes(i)) { 
+        if (i !== selectedIndex) { 
             let s = unrevealedSpawns[i]; 
             stones.push({x: s.x, y: s.y}); 
             grid[s.y][s.x] = 'STONE'; 
@@ -1062,7 +1073,7 @@ function processTempCombine(selectedIndex, recipe) {
     updateUI();
 }
 
-btnStartWave.addEventListener('click', () => { state = STATES.WAVE; waveSpawnTimer = 0; selectedTower = null; selectedStone = null; updateUI(); });
+btnStartWave.addEventListener('click', () => { state = STATES.WAVE; waveSpawnTimer = 0; waveFramesCounter = 0; setSpeed(1); document.getElementById('spd-3').disabled = true; selectedTower = null; selectedStone = null; updateUI(); });
 
 function spawnEnemy() {
     let def = waveEnemyQueue.shift();
@@ -1106,7 +1117,9 @@ function damageEnemy(e, amt, pTower, isCrit = false) {
     floatingTexts.push({ x: e.x + (Math.random()-0.5)*10, y: e.y - 15 + (Math.random()-0.5)*10, text: Math.floor(amt), color: isCrit ? '#ffd700' : '#ffffff', life: 30, maxLife: 30 });
 
     if (e.hp <= 0 && !e.dead) {
-        e.dead = true; gold += (e.isBoss ? 20 : 1) * (midasActive ? 2 : 1);
+        e.dead = true; 
+        let baseGold = e.isBoss ? ((10 + bonusEnemies) * 3) : 1;
+        gold += baseGold * (midasActive ? 2 : 1);
         let expDrop = (e.isBoss ? 2 : 0) * (expActive ? 2 : 1);
         if (expDrop > 0) exp += expDrop;
         createParticles(e.x, e.y, e.isBoss ? '#800080' : '#ff0000');
@@ -1114,6 +1127,8 @@ function damageEnemy(e, amt, pTower, isCrit = false) {
 }
 
 canvas.addEventListener('click', (e) => {
+    if (state === STATES.WAVE_CLEAR) return; // Prevent interaction during wave clear pause
+
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
@@ -1197,9 +1212,31 @@ function drawStonePyramid(x, y) {
 function createParticles(x, y, color) { for (let i=0; i<10; i++) particles.push({ x: x, y: y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, life: 20+Math.random()*10, color: color }); }
 
 function gameLoop() {
-    for (let step = 0; step < gameSpeed; step++) {
-        frames++;
-        if (state === STATES.WAVE) {
+    
+    if (state === STATES.WAVE) {
+        waveFramesCounter++;
+        if (waveFramesCounter >= 1800 && document.getElementById('spd-3').disabled) {
+            document.getElementById('spd-3').disabled = false;
+        }
+    }
+
+    if (state === STATES.WAVE_CLEAR) {
+        waveClearTimer--;
+        if (waveClearTimer <= 0) {
+            exp += 2 * (expActive ? 2 : 1); waveNumber++;
+            if (waveNumber % 5 === 1) refreshShop(); 
+            if (!leakedThisWave) bonusEnemies++; else bonusEnemies = Math.max(0, bonusEnemies - 1);
+            currentMaxSpawns = 5; midasActive = false; expActive = false;
+            precalculateWave(); 
+            state = STATES.BUILD_PLACE;
+            selectedTower = null; selectedStone = null; projectiles = []; particles = []; floatingTexts = []; 
+            updateUI();
+        }
+    }
+
+    if (state === STATES.WAVE) {
+        for (let step = 0; step < gameSpeed; step++) {
+            frames++;
             if (waveEnemiesToSpawn > 0 && frames % 30 === 0) { spawnEnemy(); waveEnemiesToSpawn--; updateUI(); }
 
             for (let i = enemies.length - 1; i >= 0; i--) {
@@ -1351,16 +1388,14 @@ function gameLoop() {
             if (waveEnemiesToSpawn === 0 && enemies.length === 0) {
                 waveClearText = "WAVE " + waveNumber + " CLEARED!";
                 waveClearTimer = 120;
-                exp += 2 * (expActive ? 2 : 1); waveNumber++;
-                if (waveNumber % 5 === 1) refreshShop(); 
-                if (!leakedThisWave) bonusEnemies++; else bonusEnemies = Math.max(0, bonusEnemies - 1);
-                currentMaxSpawns = 5; midasActive = false; expActive = false;
-                precalculateWave(); state = STATES.BUILD_PLACE;
-                selectedTower = null; selectedStone = null; projectiles = []; particles = []; floatingTexts = []; updateUI();
+                state = STATES.WAVE_CLEAR;
+                updateUI();
             }
         }
+    }
 
-        // Non-wave particles & timers
+    // Always process visual particles
+    if (state === STATES.WAVE || state === STATES.WAVE_CLEAR) {
         for(let t of towers) {
             if (t.isCombo && (t.comboColor === '#FFFFCC' || t.comboColor === '#4B0082')) {
                 if (Math.random() < 0.1) { particles.push({ x: t.x * CELL_SIZE + CELL_SIZE/2 + (Math.random()-0.5)*20, y: t.y * CELL_SIZE + CELL_SIZE/2 + (Math.random()-0.5)*20, vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2 - 1, life: 15, color: '#FFD700' }); }
@@ -1368,7 +1403,6 @@ function gameLoop() {
         }
         for (let i = particles.length - 1; i >= 0; i--) { let pt = particles[i]; pt.x += pt.vx; pt.y += pt.vy; pt.life--; if (pt.life <= 0) particles.splice(i, 1); }
         for (let i = floatingTexts.length - 1; i >= 0; i--) { let ft = floatingTexts[i]; ft.y -= 1; ft.life--; if (ft.life <= 0) floatingTexts.splice(i, 1); }
-        if (waveClearTimer > 0) waveClearTimer--;
     }
 
     // DRAW PHASE
@@ -1416,10 +1450,26 @@ function gameLoop() {
         if (pathLen > 0) {
             let framesPerCell = 2.5; let totalFrames = pathLen * framesPerCell; let currentFrame = frames % totalFrames; let progressCells = currentFrame / framesPerCell;
             
+            if (currentFrame === 0 || progressCells < 0.1) arrowTrail = [];
+            
             let i = Math.floor(progressCells);
             if (i < pathLen) {
                 let progress = progressCells - i; let p1 = cachedPath[i], p2 = cachedPath[i+1];
                 let cx = (p1.x + (p2.x - p1.x) * progress) * CELL_SIZE + CELL_SIZE/2; let cy = (p1.y + (p2.y - p1.y) * progress) * CELL_SIZE + CELL_SIZE/2; let angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+                
+                arrowTrail.push({x: cx, y: cy});
+                if (arrowTrail.length > 40) arrowTrail.shift();
+                
+                ctx.lineCap = 'round';
+                ctx.lineWidth = CELL_SIZE * 0.15;
+                for (let j = 0; j < arrowTrail.length - 1; j++) {
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${0.5 * (j / arrowTrail.length)})`;
+                    ctx.beginPath();
+                    ctx.moveTo(arrowTrail[j].x, arrowTrail[j].y);
+                    ctx.lineTo(arrowTrail[j+1].x, arrowTrail[j+1].y);
+                    ctx.stroke();
+                }
+
                 ctx.save(); ctx.translate(cx, cy); ctx.rotate(angle);
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
                 ctx.beginPath(); ctx.moveTo(-10, -10); ctx.lineTo(12, 0); ctx.lineTo(-10, 10); ctx.fill(); ctx.restore();
@@ -1430,18 +1480,37 @@ function gameLoop() {
     WAYPOINTS.forEach((wp, idx) => { 
         let cx = wp.x * CELL_SIZE + CELL_SIZE/2;
         let cy = wp.y * CELL_SIZE + CELL_SIZE/2;
-        ctx.save(); ctx.translate(cx, cy); ctx.rotate(frames * 0.02);
-        ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)'; ctx.lineWidth = 2; ctx.setLineDash([10, 10]);
-        ctx.beginPath(); ctx.arc(0, 0, CELL_SIZE * 0.4, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-        ctx.rotate(-frames * 0.05); ctx.fillStyle = 'rgba(0, 255, 255, 0.15)'; ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)'; ctx.lineWidth = 1;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        
+        ctx.rotate(frames * 0.02);
+        ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([10, 10]);
+        ctx.beginPath(); ctx.arc(0, 0, CELL_SIZE * 0.4, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
+        
+        ctx.rotate(-frames * 0.05);
+        ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
+        ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
+        ctx.lineWidth = 1;
         ctx.beginPath();
         for(let k=0; k<6; k++) {
             let a = k * Math.PI / 3;
             if(k===0) ctx.moveTo(Math.cos(a)*CELL_SIZE*0.25, Math.sin(a)*CELL_SIZE*0.25);
             else ctx.lineTo(Math.cos(a)*CELL_SIZE*0.25, Math.sin(a)*CELL_SIZE*0.25);
         }
-        ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(idx + 1, cx, cy);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        
+        ctx.restore();
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; 
+        ctx.font = 'bold 14px monospace'; 
+        ctx.textAlign = 'center'; 
+        ctx.textBaseline = 'middle';
+        ctx.fillText(idx + 1, cx, cy);
     });
 
     for (let s of stones) { drawStonePyramid(s.x, s.y); if (selectedStone === s || (state === STATES.SWAPPING && swapSource === s)) { ctx.strokeStyle = state === STATES.SWAPPING ? '#FFD700' : '#f44336'; ctx.lineWidth = 2; ctx.strokeRect(s.x*CELL_SIZE, s.y*CELL_SIZE, CELL_SIZE, CELL_SIZE); } }
@@ -1489,26 +1558,42 @@ function gameLoop() {
         if (e.phaseTimer > 0) { ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(e.x, drawY, r + 4, 0, Math.PI*2); ctx.stroke(); }
 
         if (e.isBoss) {
-            ctx.strokeStyle = '#222'; ctx.lineWidth = 3; ctx.fillStyle = '#ddd'; ctx.beginPath();
-            ctx.moveTo(e.x - r*0.4, drawY - r*0.7); ctx.lineTo(e.x - r*1.2, drawY - r*1.6); ctx.lineTo(e.x, drawY - r*0.9);
-            ctx.moveTo(e.x + r*0.4, drawY - r*0.7); ctx.lineTo(e.x + r*1.2, drawY - r*1.6); ctx.lineTo(e.x, drawY - r*0.9);
+            let pulse = 1.2 + Math.sin(frames * 0.1) * 0.2;
+            
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+            ctx.beginPath(); ctx.arc(e.x, drawY, r * 2.5 * pulse, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = 'rgba(255, 69, 0, 0.5)'; 
+            ctx.beginPath(); ctx.arc(e.x, drawY, r * 1.8 * pulse, 0, Math.PI*2); ctx.fill();
+
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 3; 
+            
+            ctx.fillStyle = '#ff9999';
+            ctx.beginPath();
+            ctx.moveTo(e.x - r*0.4, drawY - r*0.5); ctx.lineTo(e.x - r*1.5, drawY - r*2.0); ctx.lineTo(e.x - r*0.8, drawY - r*0.2);
+            ctx.moveTo(e.x + r*0.4, drawY - r*0.5); ctx.lineTo(e.x + r*1.5, drawY - r*2.0); ctx.lineTo(e.x + r*0.8, drawY - r*0.2);
             ctx.fill(); if (!e.invisible) ctx.stroke();
-            ctx.fillStyle = e.invisible ? 'rgba(255,255,255,0.3)' : '#800080';
+            
+            ctx.fillStyle = e.invisible ? 'rgba(255,255,255,0.3)' : '#8B0000'; 
             if (e.type === 'GRND') {
-                let legExt = r * 1.6, wiggle = Math.sin(frames * 0.3) * 0.5; ctx.beginPath();
+                let legExt = r * 1.8, wiggle = Math.sin(frames * 0.3) * 0.5; ctx.beginPath();
                 for(let j=0; j<4; j++) {
                     let a1 = (j * Math.PI / 2) + Math.PI/4 + wiggle; let a2 = (j * Math.PI / 2) + Math.PI/4 - wiggle;
                     ctx.moveTo(e.x, drawY); ctx.lineTo(e.x + Math.cos(a1)*legExt, drawY + Math.sin(a1)*legExt);
                     ctx.moveTo(e.x, drawY); ctx.lineTo(e.x + Math.cos(a2)*legExt, drawY + Math.sin(a2)*legExt);
                 }
-                if (!e.invisible) ctx.stroke(); ctx.beginPath(); ctx.arc(e.x, drawY, r, 0, Math.PI*2); ctx.fill(); if (!e.invisible) ctx.stroke();
+                if (!e.invisible) ctx.stroke(); ctx.beginPath(); ctx.arc(e.x, drawY, r*1.2, 0, Math.PI*2); ctx.fill(); if (!e.invisible) ctx.stroke();
             } else {
-                let wingSpan = r * 2.5, flap = Math.sin(frames * 0.4) * r;
+                let wingSpan = r * 3.0, flap = Math.sin(frames * 0.4) * r * 1.5;
                 ctx.beginPath(); ctx.moveTo(e.x, drawY); ctx.lineTo(e.x - wingSpan, drawY - flap); ctx.lineTo(e.x - wingSpan/2, drawY + r); ctx.fill(); if (!e.invisible) ctx.stroke();
                 ctx.beginPath(); ctx.moveTo(e.x, drawY); ctx.lineTo(e.x + wingSpan, drawY - flap); ctx.lineTo(e.x + wingSpan/2, drawY + r); ctx.fill(); if (!e.invisible) ctx.stroke();
-                ctx.beginPath(); ctx.arc(e.x, drawY, r*0.9, 0, Math.PI*2); ctx.fill(); if (!e.invisible) ctx.stroke();
+                ctx.beginPath(); ctx.arc(e.x, drawY, r*1.1, 0, Math.PI*2); ctx.fill(); if (!e.invisible) ctx.stroke();
             }
-            ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.ellipse(e.x - r*0.4, drawY - r*0.2, r*0.3, r*0.15, 0.3, 0, Math.PI*2); ctx.ellipse(e.x + r*0.4, drawY - r*0.2, r*0.3, r*0.15, -0.3, 0, Math.PI*2); ctx.fill();
+            
+            ctx.fillStyle = '#FFFF00'; 
+            ctx.beginPath(); 
+            ctx.ellipse(e.x - r*0.4, drawY - r*0.2, r*0.4, r*0.1, 0.4, 0, Math.PI*2); 
+            ctx.ellipse(e.x + r*0.4, drawY - r*0.2, r*0.4, r*0.1, -0.4, 0, Math.PI*2); 
+            ctx.fill();
         } 
         else if (e.type === 'GRND') {
             ctx.fillStyle = e.invisible ? 'rgba(255,255,255,0.3)' : '#FF0000'; ctx.strokeStyle = '#FF4444'; ctx.lineWidth = 3;
@@ -1562,15 +1647,21 @@ function gameLoop() {
     for (let ft of floatingTexts) { ctx.globalAlpha = ft.life / ft.maxLife; ctx.fillStyle = ft.color; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'center'; ctx.fillText(ft.text, ft.x, ft.y); }
     ctx.globalAlpha = 1.0;
 
-    if (waveClearTimer > 0) {
-        ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(0.7, waveClearTimer / 20)})`;
+    if (state === STATES.WAVE_CLEAR) {
+        ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(0.6, (120 - waveClearTimer) / 20)})`;
         ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
         
         ctx.save();
         ctx.translate(CANVAS_SIZE/2, CANVAS_SIZE/2);
-        let scale = 1.0 + (120 - waveClearTimer) * 0.005; // Base 1.0 for 1024x1024 screen
+        let scale = 1.0;
+        if (waveClearTimer > 100) scale = 0.5 + (120 - waveClearTimer) * 0.025; // pop in
         ctx.scale(scale, scale);
-        ctx.globalAlpha = Math.min(1, waveClearTimer / 30);
+        
+        let alpha = 1;
+        if (waveClearTimer > 100) alpha = (120 - waveClearTimer) / 20;
+        if (waveClearTimer < 20) alpha = waveClearTimer / 20; // fade out
+        ctx.globalAlpha = alpha;
+        
         ctx.font = 'bold 60px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
